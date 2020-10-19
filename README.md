@@ -14,7 +14,7 @@ Bitcoin: bc1q3prwstl54j3a5j58esepfkyrqfjn0ydr8p3vc7
 
 Also you can buy:
 
-fully assembled - $49.5
+fully assembled - 51.5
 
 Video: https://youtu.be/0yZfeFMDKKY
 
