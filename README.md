@@ -1,0 +1,2 @@
+# EFEKTA-EINK290-TEMP-HUM-PRES-WEATHER-MINI-STATION-NRF52
+New arduino project. Wireless weather mini station with electronic ink display 2.9 inches (GDEH029A1), very low power consumption,compact size, housing with magnets. The device can use si7020 / 21, sht20 / 21, HTU20/21D or BME280 sensors. Use the MINEW MS50SFA RF module with nRF5210, nRF52811, nRF52832 chips, or the EBYTE E73 module with nRF52840 and nRF52833 chips.
