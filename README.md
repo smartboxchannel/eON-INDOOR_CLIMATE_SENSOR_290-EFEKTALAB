@@ -1,2 +1,25 @@
-# EFEKTA-EINK290-TEMP-HUM-PRES-WEATHER-MINI-STATION-NRF52
-New arduino project. Wireless weather mini station with electronic ink display 2.9 inches (GDEH029A1), very low power consumption,compact size, housing with magnets. The device can use si7020 / 21, sht20 / 21, HTU20/21D or BME280 sensors. Use the MINEW MS50SFA RF module with nRF5210, nRF52811, nRF52832 chips, or the EBYTE E73 module with nRF52840 and nRF52833 chips.
+# EFEKTA EINK2.9 Inch TEMP-HUM-PRES WEATHER MINI STATION ON NRF52
+
+Temperature, humidity and pressure sensor with 2.9 e-ink display.
+
+#### Donate me, ..I will make more and faster open devices :)
+
+PayPal: altigraph@ya.ru
+
+Yandex Money: 4100140180242
+
+WebMoney: Z722291985192, X133903637383, R494367503336
+
+Bitcoin: bc1q3prwstl54j3a5j58esepfkyrqfjn0ydr8p3vc7
+
+Also you can buy:
+
+fully assembled - $49.5
+
+Video: https://youtu.be/0yZfeFMDKKY
+
+More info at http://efektalab.com/eink290
+
+---
+
+![FEKTA EINK2.9 Inch TEMP-HUM-PRES WEATHER MINI STATION ON NRF52](https://github.com/smartboxchannel/EFEKTA-EINK154-TEMP-HUM-PRES-SENSOR-NRF52/blob/master/Images/0001.jpg)
