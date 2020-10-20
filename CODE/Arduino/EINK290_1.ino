@@ -1,3 +1,20 @@
+// ###################          Mini wither station with electronic ink display 2.9 Inch | nRF52            ############### //
+//                                                                                                                          //
+//        @filename   :   EFEKTA_THEINK102_1.4.ino                                                                          //
+//        @brief en   :   Wireless, battery-operated temperature and humidity sensor (SHT20, SI7020)                        //
+//                        with electronic ink display(Good Display GDEW0102T4). Works on nRF52.                             //
+//        @brief ru   :   Беcпроводной, батарейный датчик температуры и влажности(sht20, si7020)                            //
+//                        с дисплеем на электронных чернилах(Good Display GDEW0102T4). Работает на nRF52.                   //
+//        @author     :   Andrew Lamchenko aka Berk                                                                         //
+//                                                                                                                          //
+//        Copyright (C) EFEKTALAB 2020                                                                                      //
+//        Copyright (c) 2014-2015 Arduino LLC.  All right reserved.                                                         //
+//        Copyright (c) 2016 Arduino Srl.  All right reserved.                                                              //
+//        Copyright (c) 2017 Sensnology AB. All right reserved.                                                             //
+//        Copyright (C) Waveshare     August 10 2017//                                                                      //
+//                                                                                                                          //
+// ######################################################################################################################## //
+
 #define WDTENABLE
 #define DCPOWER
 //#define LANG_EN
@@ -3607,10 +3624,12 @@ void gpiote_event_handler(uint32_t event_pins_low_to_high, uint32_t event_pins_h
 
 static __INLINE void wdt_init(void)
 {
+  #ifdef WDTENABLE
   NRF_WDT->CONFIG = (WDT_CONFIG_HALT_Pause << WDT_CONFIG_HALT_Pos) | ( WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos);
   NRF_WDT->CRV = 35 * 32768;
   NRF_WDT->RREN |= WDT_RREN_RR0_Msk;
   NRF_WDT->TASKS_START = 1;
+  #endif
 }
 
 
