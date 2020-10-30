@@ -12,7 +12,7 @@ WebMoney: Z722291985192, X133903637383, R494367503336
 
 Bitcoin: bc1q3prwstl54j3a5j58esepfkyrqfjn0ydr8p3vc7
 
-Also you can buy:
+Also you can buy: https://www.tindie.com/products/diyberk/wireless-mini-weather-station-29-inch-e-paper/
 
 fully assembled - 51.5
 
