@@ -14,9 +14,8 @@ Bitcoin: bc1q3prwstl54j3a5j58esepfkyrqfjn0ydr8p3vc7
 
 Also you can buy: https://www.tindie.com/products/diyberk/wireless-mini-weather-station-29-inch-e-paper/
 
-fully assembled - 51.5
+fully assembled - $51.5
 
-https://www.tindie.com/products/diyberk/wireless-mini-weather-station-29-inch-e-paper/
 
 Video: https://youtu.be/0yZfeFMDKKY
 
