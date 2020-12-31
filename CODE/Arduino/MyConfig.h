@@ -13,44 +13,20 @@
 //        Copyright (c) 2014-2015 Arduino LLC.  All right reserved.                                                          //
 //        Copyright (c) 2016 Arduino Srl.  All right reserved.                                                               //
 //        Copyright (c) 2017 Sensnology AB. All right reserved.                                                              //
-//        Copyright (C) Waveshare     August 10 2017//                                                                       //
+//        Copyright (C) Waveshare     August 10 2017                                                                         //
 //                                                                                                                           //
 // ######################################################################################################################### //
 
-
-#include "eink.h"
-#include <SPI.h>
-
-EpdIf::EpdIf() {
-};
-
-EpdIf::~EpdIf() {
-};
-
-void EpdIf::DigitalWrite(int pin, int value) {
-    digitalWrite(pin, value);
-}
-
-int EpdIf::DigitalRead(int pin) {
-    return digitalRead(pin);
-}
-
-void EpdIf::DelayMs(unsigned int delaytime) {
-    delay(delaytime);
-}
-
-void EpdIf::SpiTransfer(unsigned char data) {
-    digitalWrite(CS_PIN, LOW);
-    SPI.transfer(data);
-    digitalWrite(CS_PIN, HIGH);
-}
-
-int EpdIf::IfInit(void) {
-    pinMode(CS_PIN, OUTPUT);
-    pinMode(RST_PIN, OUTPUT);
-    pinMode(DC_PIN, OUTPUT);
-    pinMode(BUSY_PIN, INPUT); 
-    SPI.begin();
-    SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
-    return 0;
-}
+//#define EBYTE
+#define WDTENABLE
+#define DCPOWER
+#define LANG_EN
+//#define MY_DEBUG
+//#define MY_PASSIVE_NODE
+#define MY_NODE_ID 101
+//#define MY_NRF5_ESB_MODE (NRF5_1MBPS)
+#define MY_NRF5_ESB_MODE (NRF5_250KBPS)
+#define MY_RESET_REASON_TEXT
+#define SN "EFEKTA WeatherStation 290"
+#define SV "0.30"
+#define MY_RADIO_NRF5_ESB

@@ -1,48 +1,51 @@
-// ###################          Mini wither station with electronic ink display 2.9 Inch | nRF52            ############### //
-//                                                                                                                          //
-//        @filename   :   EFEKTA_THEINK102_1.4.ino                                                                          //
-//        @brief en   :   Wireless, battery-operated temperature and humidity sensor (SHT20, SI7020)                        //
-//                        with electronic ink display(Good Display GDEW0102T4). Works on nRF52.                             //
-//        @brief ru   :   Беcпроводной, батарейный датчик температуры и влажности(sht20, si7020)                            //
-//                        с дисплеем на электронных чернилах(Good Display GDEW0102T4). Работает на nRF52.                   //
-//        @author     :   Andrew Lamchenko aka Berk                                                                         //
-//                                                                                                                          //
-//        Copyright (C) EFEKTALAB 2020                                                                                      //
-//        Copyright (c) 2014-2015 Arduino LLC.  All right reserved.                                                         //
-//        Copyright (c) 2016 Arduino Srl.  All right reserved.                                                              //
-//        Copyright (c) 2017 Sensnology AB. All right reserved.                                                             //
-//        Copyright (C) Waveshare     August 10 2017//                                                                      //
-//                                                                                                                          //
-// ######################################################################################################################## //
-
-#define WDTENABLE
-#define DCPOWER
-//#define LANG_EN
-//#define MY_DEBUG
-//#define MY_PASSIVE_NODE
-//#define MY_NODE_ID 100
-#define MY_RESET_REASON_TEXT
-#define SN "EFEKTA WeatherStation 290"
-#define SV "0.25"
-#define MY_RADIO_NRF5_ESB
-#define MY_NRF5_ESB_PA_LEVEL (RADIO_TXPOWER_TXPOWER_Pos3dBm)
+// ###################           Mini wither station with electronic ink display 2.9 Inch | nRF52            ############### //
+//                                                                                                                           //
+//        @filename   :   EFEKTA_THPEINK290_0.29.ino                                                                         //
+//        @brief en   :   Wireless, battery-operated temperature,humidity and pressure sensor(SHT20, SI7020, HTU21D, BME280) //
+//                        with electronic ink display(Good Display GDEH029A1). The extended version adds the MAX44009 light  //
+//                        sensor, an active bizzer Works on nRF52.                                                           //
+//        @brief ru   :   Беcпроводной, батарейный датчик температуры, влажности и давления(SHT20, SI7020, HTU21D, BME280)   //
+//                        с дисплеем на электронных чернилах(Good Display GDEH029A1). В расширенной версии добавлен          //
+//                        датчик света MAX44009, активный биззер. Работает на nRF52832, nRF52840.                            //
+//        @author     :   Andrew Lamchenko aka Berk                                                                          //
+//                                                                                                                           //
+//        Copyright (C) EFEKTALAB 2020                                                                                       //
+//        Copyright (c) 2014-2015 Arduino LLC.  All right reserved.                                                          //
+//        Copyright (c) 2016 Arduino Srl.  All right reserved.                                                               //
+//        Copyright (c) 2017 Sensnology AB. All right reserved.                                                              //
+//        Copyright (C) Waveshare     August 10 2017                                                                         //
+//                                                                                                                           //
+// ######################################################################################################################### //
 
 
+#include "MyConfig.h"
+#include <TimeLib.h>
 #include "eink290.h"
 #include "einkpaint.h"
 #include "einkimgdata.h"
-#include <TimeLib.h>
+#ifdef EBYTE
+#include <MAX44009.h>
+MAX44009 light;
+#endif
 
-const uint16_t shortWait = 50;
+#ifdef EBYTE
+#define MY_NRF5_ESB_PA_LEVEL (0x8UL)
+#else
+#define MY_NRF5_ESB_PA_LEVEL (0x4UL)
+#endif
+
+const uint16_t shortWait = 40;
 uint16_t minuteT = 60000;
 float tempThreshold = 0.33;
-float humThreshold = 1.0;
-float pressThreshold = 0.2;
+float humThreshold = 1.5;
+float pressThreshold = 0.33;
 #ifdef WDTENABLE
 const uint32_t SLEEP_TIME_WDT = 10000;
 uint32_t sleepTimeCount;
 #endif
 
+
+bool setSound;
 bool ckeck_hm;
 bool colorPrint;
 bool opposite_colorPrint;
@@ -53,6 +56,7 @@ bool tch;
 bool hch;
 bool bch;
 bool pch;
+bool lch;
 bool fch;
 bool metric;
 bool timeReceived;
@@ -98,6 +102,12 @@ int16_t myid;
 int16_t mypar;
 int16_t old_mypar = -1;
 
+#ifdef EBYTE
+float brightness;
+float old_brightness;
+float brightThreshold = 1.5;
+#endif
+
 uint16_t BATT_TIME;
 uint16_t BATT_COUNT;
 uint32_t configMillis;
@@ -131,16 +141,26 @@ int16_t mtwr;
 #define HUM_CHILD_ID 1
 #define BARO_CHILD_ID 2
 #define FORECAST_CHILD_ID 3
+#ifdef EBYTE
+#define LUX_SENS_CHILD_ID 4
+#endif
 #define SIGNAL_Q_ID 100
 #define BATTERY_VOLTAGE_ID 101
 #define SET_TIME_SEND_ID 102
 #define SET_BATT_SEND_ID 103
 #define MY_SEND_RESET_REASON 105
 #define SET_COLOR_ID 106
+#ifdef EBYTE
+#define SET_SOUND_ID 107
+#endif
 MyMessage msgTemp(TEMP_CHILD_ID, V_TEMP);
 MyMessage msgHum(HUM_CHILD_ID, V_HUM);
 MyMessage msgPres(BARO_CHILD_ID, V_PRESSURE);
 MyMessage forecastMsg(FORECAST_CHILD_ID, V_VAR1);
+#ifdef EBYTE
+MyMessage brightMsg(LUX_SENS_CHILD_ID, V_LEVEL);
+MyMessage setSoundMsg(SET_SOUND_ID, V_VAR1);
+#endif
 MyMessage sqMsg(SIGNAL_Q_ID, V_VAR1);
 MyMessage bvMsg(BATTERY_VOLTAGE_ID, V_VAR1);
 MyMessage setTimeSendMsg(SET_TIME_SEND_ID, V_VAR1);
@@ -191,8 +211,8 @@ void colorChange(bool flag) {
 }
 
 
-void receiveTime(unsigned long controllerTime) {
-  controllerTime = controllerTime + timeZone * SECS_PER_HOUR;
+void receiveTime(unsigned long controllerTime2) {
+  unsigned long controllerTime = controllerTime2 + timeZone * SECS_PER_HOUR;
   setTime(controllerTime);
   timeReceived = true;
 }
@@ -223,7 +243,405 @@ void DrawImageWH(Paint * paint, int x, int y, const unsigned char* imgData, int 
 
 
 void displayTemp(float temp, bool metr) {
+#ifdef EBYTE
+#ifdef LANG_EN
+  DrawImageWH(&paint, 3, 112, TEMPEN, 10, 72, colorPrint);
+#else
+  DrawImageWH(&paint, 3, 112, TEMP, 10, 72, colorPrint);
+#endif
 
+  int temperature_temp = round(temp * 10.0);
+
+  if (metr) {
+    if (temperature_temp >= 100) {
+
+      DrawImageWH(&paint, 24, 63, NTC, 16, 20, colorPrint);
+
+      byte one_t = temperature_temp / 100;
+      byte two_t = temperature_temp % 100 / 10;
+      byte three_t = temperature_temp % 10;
+
+      switch (one_t) {
+        case 1:
+          DrawImageWH(&paint, 16, 174, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 174, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 174, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 174, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 174, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 174, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 174, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 174, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 174, NT9, 66, 40, colorPrint);
+          break;
+      }
+
+      switch (two_t) {
+        case 0:
+          DrawImageWH(&paint, 16, 134, NT0, 66, 40, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 16, 134, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 134, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 134, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 134, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 134, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 134, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 134, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 134, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 134, NT9, 66, 40, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 71, 123, NTP, 11, 11, colorPrint);
+
+      switch (three_t) {
+        case 0:
+          DrawImageWH(&paint, 16, 83, NT0, 66, 40, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 16, 83, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 83, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 83, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 83, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 83, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 83, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 83, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 83, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 83, NT9, 66, 40, colorPrint);
+          break;
+      }
+    } else {
+
+      DrawImageWH(&paint, 24, 83, NTC, 16, 20, colorPrint);
+
+      byte one_t = temperature_temp / 10;
+      byte two_t = temperature_temp % 10;
+
+      switch (one_t) {
+        case 1:
+          DrawImageWH(&paint, 16, 154, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 154, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 154, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 154, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 154, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 154, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 154, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 154, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 154, NT9, 66, 40, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 71, 143, NTP, 11, 11, colorPrint);
+
+      switch (two_t) {
+        case 0:
+          DrawImageWH(&paint, 16, 103, NT0, 66, 40, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 16, 103, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 103, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 103, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 103, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 103, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 103, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 103, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 103, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 103, NT9, 66, 40, colorPrint);
+          break;
+      }
+    }
+  } else {
+    if (temperature_temp < 1000) {
+
+      DrawImageWH(&paint, 24, 63, NTF, 16, 20, colorPrint);
+
+      byte one_t = temperature_temp / 100;
+      byte two_t = temperature_temp % 100 / 10;
+      byte three_t = temperature_temp % 10;
+
+      switch (one_t) {
+        case 1:
+          DrawImageWH(&paint, 16, 174, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 174, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 174, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 174, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 174, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 174, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 174, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 174, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 174, NT9, 66, 40, colorPrint);
+          break;
+      }
+
+      switch (two_t) {
+        case 0:
+          DrawImageWH(&paint, 16, 134, NT0, 66, 40, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 16, 134, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 134, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 134, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 134, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 134, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 134, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 134, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 134, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 134, NT9, 66, 40, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 71, 123, NTP, 11, 11, colorPrint);
+
+      switch (three_t) {
+        case 0:
+          DrawImageWH(&paint, 16, 83, NT0, 66, 40, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 16, 83, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 83, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 83, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 83, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 83, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 83, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 83, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 83, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 83, NT9, 66, 40, colorPrint);
+          break;
+      }
+    } else {
+
+      DrawImageWH(&paint, 24, 68, NTF, 16, 20, colorPrint);
+
+      byte one_t = temperature_temp / 1000;
+      byte two_t = temperature_temp % 1000 / 100;
+      byte three_t = temperature_temp % 100 / 10;
+
+      switch (one_t) {
+        case 1:
+          DrawImageWH(&paint, 16, 168, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 168, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 168, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 168, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 168, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 168, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 168, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 168, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 168, NT9, 66, 40, colorPrint);
+          break;
+      }
+
+      switch (two_t) {
+        case 0:
+          DrawImageWH(&paint, 16, 128, NT0, 66, 40, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 16, 128, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 128, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 128, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 128, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 128, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 128, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 128, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 128, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 128, NT9, 66, 40, colorPrint);
+          break;
+      }
+
+      switch (three_t) {
+        case 0:
+          DrawImageWH(&paint, 16, 88, NT0, 66, 40, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 16, 88, NT1, 66, 40, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 16, 88, NT2, 66, 40, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 16, 88, NT3, 66, 40, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 16, 88, NT4, 66, 40, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 16, 88, NT5, 66, 40, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 16, 88, NT6, 66, 40, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 16, 88, NT7, 66, 40, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 16, 88, NT8, 66, 40, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 16, 88, NT9, 66, 40, colorPrint);
+          break;
+      }
+    }
+  }
+#else
 #ifdef LANG_EN
   DrawImageWH(&paint, 6, 112, TEMPEN, 10, 72, colorPrint);
 #else
@@ -621,8 +1039,378 @@ void displayTemp(float temp, bool metr) {
       }
     }
   }
+#endif
 }
 
+
+#ifdef EBYTE
+void displayLux(float brig_temp) {
+
+#ifdef LANG_EN
+  //DrawImageWH(&paint, 43, 220, PRESEN, 10, 72, colorPrint);
+#else
+  //DrawImageWH(&paint, 43, 220, PRES, 10, 72, colorPrint);
+#endif
+
+
+  long brig = round(brig_temp * 10.0);
+
+  if (brig < 100) {
+    byte one_l = brig / 10;
+    byte two_l = brig % 10;
+
+#ifdef LANG_EN
+    DrawImageWH(&paint, 85, 120, LUX, 16, 27, colorPrint);
+#else
+    DrawImageWH(&paint, 85, 120, LUX, 16, 27, colorPrint);
+#endif
+
+    switch (one_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 167, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 167, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 167, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 167, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 167, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 167, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 167, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 167, CD9, 16, 9, colorPrint);
+        break;
+    }
+
+    DrawImageWH(&paint, 85, 162, CDP, 16, 5, colorPrint);
+
+    switch (two_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 153, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 153, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 153, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 153, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 153, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 153, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 153, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 153, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 153, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 153, CD9, 16, 9, colorPrint);
+        break;
+    }
+  }
+  if (brig >= 100 & brig < 1000) {
+    byte one_l = brig / 100;
+    byte two_l = brig % 10 / 10;
+    byte three_l = brig % 10;
+
+#ifdef LANG_EN
+    DrawImageWH(&paint, 85, 116, LUX, 16, 27, colorPrint);
+#else
+    DrawImageWH(&paint, 85, 116, LUX, 16, 27, colorPrint);
+#endif
+
+    switch (one_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 172, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 172, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 172, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 172, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 172, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 172, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 172, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 172, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 172, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 172, CD9, 16, 9, colorPrint);
+        break;
+    }
+
+    switch (two_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 163, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 163, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 163, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 163, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 163, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 163, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 163, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 163, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 163, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 163, CD9, 16, 9, colorPrint);
+        break;
+    }
+
+    DrawImageWH(&paint, 85, 158, CDP, 16, 5, colorPrint);
+
+    switch (three_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 149, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 149, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 149, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 149, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 149, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 149, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 149, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 149, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 149, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 149, CD9, 16, 9, colorPrint);
+        break;
+    }
+  }
+
+  if (brig >= 1000 & brig < 10000) {
+    byte one_l = brig / 1000;
+    byte two_l = brig % 1000 / 100;
+    byte three_l = brig % 100 / 10;
+    byte four_l = brig % 10;
+
+#ifdef LANG_EN
+    DrawImageWH(&paint, 85, 111, LUX, 16, 27, colorPrint);
+#else
+    DrawImageWH(&paint, 85, 111, LUX, 16, 27, colorPrint);
+#endif
+
+    switch (one_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 176, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 176, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 176, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 176, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 176, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 176, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 176, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 176, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 176, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 176, CD9, 16, 9, colorPrint);
+        break;
+    }
+
+    switch (two_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 167, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 167, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 167, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 167, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 167, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 167, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 167, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 167, CD9, 16, 9, colorPrint);
+        break;
+    }
+
+    switch (three_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 158, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 158, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 158, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 158, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 158, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 158, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 158, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 158, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 158, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 158, CD9, 16, 9, colorPrint);
+        break;
+    }
+
+    DrawImageWH(&paint, 85, 153, CDP, 16, 5, colorPrint);
+
+    switch (four_l) {
+      case 0:
+        DrawImageWH(&paint, 85, 144, CD1, 16, 9, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 85, 144, CD1, 16, 9, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 85, 144, CD2, 16, 9, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 85, 144, CD3, 16, 9, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 85, 144, CD4, 16, 9, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 85, 144, CD5, 16, 9, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 85, 144, CD6, 16, 9, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 85, 144, CD7, 16, 9, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 85, 144, CD8, 16, 9, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 85, 144, CD9, 16, 9, colorPrint);
+        break;
+    }
+  }
+
+  if (brig >= 10000 & brig < 100000) {
+    byte one_l = brig / 10000;
+    byte two_l = brig % 10000 / 1000;
+    byte three_l = brig % 1000 / 100;
+    byte four_l = brig % 100 / 10;
+    byte five_l = brig % 10;
+  }
+
+  if (brig >= 100000 & brig < 1000000) {
+    byte one_l = brig / 100000;
+    byte two_l = brig % 100000 / 10000;
+    byte three_l = brig % 10000 / 1000;
+    byte four_l = brig % 1000 / 100;
+    byte five_l = brig % 100 / 10;
+    byte six_l = brig % 10;
+  }
+}
+#endif
 
 
 void displayPres(float pres, bool metr) {
@@ -1466,7 +2254,7 @@ void displayForecast(uint8_t f) {
 
 
 void displayDMY() {
-  uint16_t yearPrint = year();
+  int yearPrint = year();
   if (timeReceived) {
 
     year_one = yearPrint / 1000;
@@ -1607,7 +2395,7 @@ void displayDMY() {
     DrawImageWH(&paint, 2, 42, CDP, 16, 5, colorPrint);
 
 
-    uint16_t monthPrint = month();
+    int monthPrint = month();
     if (monthPrint > 9) {
       month_one = monthPrint / 10;
       month_two = monthPrint % 10;
@@ -1683,7 +2471,7 @@ void displayDMY() {
 
     DrawImageWH(&paint, 2, 65, CDP, 16, 5, colorPrint);
 
-    uint16_t dayPrint = day();
+    int dayPrint = day();
     if (dayPrint > 9) {
       day_one = dayPrint / 10;
       day_two = dayPrint % 10;
@@ -1760,7 +2548,7 @@ void displayDMY() {
 
 
     DrawImageWH(&paint, 2, 244, CDP2, 16, 5, colorPrint);
-    byte weekdayPrint = weekday(); // Sunday is day 1
+    int weekdayPrint = weekday(); // Sunday is day 1
 #ifdef LANG_EN
     switch (weekdayPrint) {
       case 1:
@@ -1817,7 +2605,7 @@ void displayDMY() {
 void displayHM(bool hm) {
   if (timeReceived) {
     if (hm == false) {
-      uint16_t hourPrint = hour();
+      int hourPrint = hour();
       if (hourPrint > 9) {
         hour_one = hourPrint / 10;
         hour_two = hourPrint % 10;
@@ -1893,7 +2681,7 @@ void displayHM(bool hm) {
 
       DrawImageWH(&paint, 2, 267, CD2P, 16, 5, colorPrint);
 
-      uint8_t minutePrint = minute();
+      int minutePrint = minute();
       if (minutePrint > 9) {
         minute_one = minutePrint / 10;
         minute_two = minutePrint % 10;
@@ -1967,7 +2755,7 @@ void displayHM(bool hm) {
           break;
       }
     } else {
-      uint16_t hourPrint = hour();
+      int hourPrint = hour();
       if (hourPrint > 9) {
         hour_one = hourPrint / 10;
         hour_two = hourPrint % 10;
@@ -2043,7 +2831,7 @@ void displayHM(bool hm) {
 
       DrawImageWH(&paint, 2, 18, CD2P, 16, 5, colorPrint);
 
-      uint8_t minutePrint = minute();
+      int minutePrint = minute();
       if (minutePrint > 9) {
         minute_one = minutePrint / 10;
         minute_two = minutePrint % 10;
@@ -2176,6 +2964,9 @@ void displayUpdate(float t, float h, float p, int16_t f, bool m, bool hm) {
     displayTemp(t, m);
     displayPres(p, m);
     displayHum(h);
+#ifdef EBYTE
+    displayLux(brightness);
+#endif
     displayBatt(battery);
     displayLink(nRFRSSI);
     displayForecast(forecast);
@@ -2569,21 +3360,41 @@ void reportBattInk() {
 
 void blinkLed () {
   digitalWrite(LED_BUILTIN, HIGH);
-  delay(100);
+  delay(20);
   digitalWrite(LED_BUILTIN, LOW);
 }
 
 
 void preHwInit() {
+#ifdef EBYTE
+  pinMode(SOUND_PIN, OUTPUT);
+  digitalWrite(SOUND_PIN, LOW);
+#endif
   pinMode(PIN_BUTTON, INPUT);
+  pinMode(29, INPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-  blinkLed ();
+  //blinkLed ();
 }
 
 
 void before()
 {
-#ifndef DCPOWER
+#ifdef EBYTE
+  if (((NRF_UICR->PSELRESET[0] & UICR_PSELRESET_CONNECT_Msk) != (UICR_PSELRESET_CONNECT_Connected << UICR_PSELRESET_CONNECT_Pos)) ||
+      ((NRF_UICR->PSELRESET[1] & UICR_PSELRESET_CONNECT_Msk) != (UICR_PSELRESET_CONNECT_Connected << UICR_PSELRESET_CONNECT_Pos))) {
+    NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+    NRF_UICR->PSELRESET[0] = 18;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+    NRF_UICR->PSELRESET[1] = 18;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+    NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+    NVIC_SystemReset();
+  }
+#endif
+
+#ifdef DCPOWER
   NRF_POWER->DCDCEN = 1;
 #endif
   NRF_SAADC ->ENABLE = 0;
@@ -2602,6 +3413,10 @@ void before()
 
 #ifndef MY_DEBUG
   NRF_UART0->ENABLE = 0;
+#endif
+
+#ifdef EBYTE
+  NRF_RADIO->TXPOWER = 0x8UL;
 #endif
 
   happy_init();
@@ -2626,10 +3441,18 @@ void before()
   colorChange(loadState(106));
   //colorChange(true); // для теста, true или false
 
-  timeConf();
+  setSound = loadState(107);
+  if (setSound > 1) {
+    setSound = 1;
+    saveState(107, setSound);
+  }
+  setSound = 1;
 
+  timeConf();
+  blinkLed ();
   displayStart();
-  
+  blinkLed ();
+
 #ifdef WDTENABLE
   wdt_init();
 #endif
@@ -2682,7 +3505,16 @@ void presentation()
     wait(shortWait * 2);
     _transportSM.failedUplinkTransmissions = 0;
   }
-
+#ifdef EBYTE
+  check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
+  if (!check) {
+    _transportSM.failedUplinkTransmissions = 0;
+    wait(shortWait);
+    check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
+    wait(shortWait * 2);
+    _transportSM.failedUplinkTransmissions = 0;
+  }
+#endif
   check = present(SIGNAL_Q_ID, S_CUSTOM, "SIGNAL %");
   if (!check) {
     _transportSM.failedUplinkTransmissions = 0;
@@ -2736,6 +3568,18 @@ void presentation()
     wait(shortWait * 2);
     _transportSM.failedUplinkTransmissions = 0;
   }
+
+#ifdef EBYTE
+  check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
+  if (!check) {
+    _transportSM.failedUplinkTransmissions = 0;
+    wait(shortWait);
+    check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
+    wait(shortWait * 2);
+    _transportSM.failedUplinkTransmissions = 0;
+  }
+#endif
+
   wait(shortWait * 2);
   sendConfig();
   wait(shortWait);
@@ -2749,7 +3593,7 @@ void setup() {
   if (flag_nogateway_mode == false) {
     requestTime();
     wait(2000, C_REQ, I_TIME);
-    wait(300);
+    //wait(300);
     sendResetReason();
   }
 
@@ -2763,10 +3607,21 @@ void setup() {
 #endif
 
   bme_initAsleep();
+  wait(100);
+
+#ifdef EBYTE
+  light.begin();
+  wait(100);
+#endif
 
   readBatt();
 
   blinkLed ();
+  #ifdef EBYTE
+  Sound();
+  wait(500);
+  Sound();
+  #endif
 }
 
 
@@ -3102,10 +3957,10 @@ void readData() {
   bme.takeForcedMeasurement();
   wait(shortWait);
   temperature = bme.readTemperature();
-  wait(shortWait);
+  //wait(shortWait);
   pressure = bme.readPressure() / 100.0F;
   forecast = sample(pressure);
-  wait(shortWait);
+  //wait(shortWait);
   if (chek_h == true) {
     humidity = bme.readHumidity();
     wait(shortWait);
@@ -3166,6 +4021,20 @@ void readData() {
     change = true;
     hch = true;
   }
+
+#ifdef EBYTE
+  brightness = light.get_lux() * 5.0;
+  wait(30);
+
+  if (abs(brightness - old_brightness) >= brightThreshold) {
+    old_brightness = brightness;
+    change = true;
+    lch = true;
+  }
+#endif
+
+
+
   BATT_COUNT++;
   CORE_DEBUG(PSTR("BATT_COUNT: %d\n"), BATT_COUNT);
   if (BATT_COUNT >= BATT_TIME) {
@@ -3250,6 +4119,25 @@ void sendData() {
         fch = false;
         blinkEnable = true;
       }
+#ifdef EBYTE
+      if (lch == true) {
+        check = send(brightMsg.setDestination(0).set(brightness, 2));
+        if (check == false) {
+          _transportSM.failedUplinkTransmissions = 0;
+          wait(shortWait * 4);
+          check = send(brightMsg.setDestination(0).set(brightness, 2));
+          if (check == false) {
+            wait(shortWait * 8);
+            _transportSM.failedUplinkTransmissions = 0;
+            check = send(brightMsg.setDestination(0).set(brightness, 2));
+            wait(shortWait * 2);
+          }
+        }
+        lch = false;
+        checkSend();
+        blinkEnable = true;
+      }
+#endif
     }
     if (BATT_COUNT >= BATT_TIME) {
       CORE_DEBUG(PSTR("BATT_COUNT == BATT_TIME: %d\n"), BATT_COUNT);
@@ -3267,6 +4155,9 @@ void sendData() {
     }
     if (blinkEnable == true) {
       blinkLed();
+#ifdef EBYTE
+      //Sound();
+#endif
     }
   } else {
     if (BATT_COUNT >= BATT_TIME) {
@@ -3283,6 +4174,9 @@ void sendData() {
     bch = false;
     pch = false;
     fch = false;
+#ifdef EBYTE
+    lch = false;
+#endif
   }
   wdt_nrfReset();
   if (!timeReceived) {
@@ -3343,7 +4237,7 @@ void batLevSend() {
     wait(1500, C_INTERNAL, I_BATTERY_LEVEL);
     if (!check) {
       _transportSM.failedUplinkTransmissions = 0;
-      wait(50);
+      //wait(50);
       check = sendBatteryLevel(battery, 1);
       wait(1500, C_INTERNAL, I_BATTERY_LEVEL);
     }
@@ -3357,10 +4251,12 @@ void batLevSend() {
       wait(100);
       check = send(bvMsg.set(batteryVoltageF, 2));
       _transportSM.failedUplinkTransmissions = 0;
-      wait(100);
+      //wait(100);
     } else {
       CORE_DEBUG(PSTR("MyS: SEND BATTERY VOLTAGE\n"));
     }
+    requestTime();
+    wait(1500, C_REQ, I_TIME);
   }
 }
 
@@ -3498,6 +4394,17 @@ void sendConfig() {
     wait(shortWait * 2);
     _transportSM.failedUplinkTransmissions = 0;
   }
+
+#ifdef EBYTE
+  check = send(setSoundMsg.set(setSound));
+  if (check == false) {
+    _transportSM.failedUplinkTransmissions = 0;
+    wait(shortWait);
+    check = send(setSoundMsg.set(setSound));
+    wait(shortWait * 2);
+    _transportSM.failedUplinkTransmissions = 0;
+  }
+#endif
 }
 
 
@@ -3597,6 +4504,28 @@ void receive(const MyMessage & message)
 #endif
       }
     }
+
+#ifdef EBYTE
+    if (message.sensor == SET_SOUND_ID) {
+      if (message.type == V_VAR1) {
+        setSound = message.getBool();
+        if (setSound > 1) {
+          setSound = 1;
+        }
+        saveState(107, setSound);
+        wait(shortWait);
+        send(setSoundMsg.set(setSound));
+        wait(shortWait);
+        transportDisable();
+        wait(shortWait);
+        configMode = false;
+        change = true;
+#ifdef WDTENABLE
+        sleepTimeCount = SLEEP_TIME;
+#endif
+      }
+    }
+#endif
   }
 }
 
@@ -3621,15 +4550,35 @@ void gpiote_event_handler(uint32_t event_pins_low_to_high, uint32_t event_pins_h
   }
 }
 
+#ifdef EBYTE
+void Sound() {
+  if (setSound == 1) {
+    myTone(400, 10);
+    wait(10);
+    myTone(200, 5);
+  }
+}
+
+
+void myTone(uint32_t j, uint32_t k) {
+  j = 500000 / j;
+  k += millis();
+  while (k > millis()) {
+    digitalWrite(SOUND_PIN, HIGH); delayMicroseconds(j);
+    digitalWrite(SOUND_PIN, LOW ); delayMicroseconds(j);
+  }
+}
+#endif
+
 
 static __INLINE void wdt_init(void)
 {
-  #ifdef WDTENABLE
+#ifdef WDTENABLE
   NRF_WDT->CONFIG = (WDT_CONFIG_HALT_Pause << WDT_CONFIG_HALT_Pos) | ( WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos);
   NRF_WDT->CRV = 35 * 32768;
   NRF_WDT->RREN |= WDT_RREN_RR0_Msk;
   NRF_WDT->TASKS_START = 1;
-  #endif
+#endif
 }
 
 
