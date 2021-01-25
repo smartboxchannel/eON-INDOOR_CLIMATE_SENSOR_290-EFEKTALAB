@@ -17,16 +17,21 @@
 //                                                                                                                           //
 // ######################################################################################################################### //
 
+
+//#define EINK_V1
 //#define EBYTE
+#define EBYTE2
+//#define BME680
 #define WDTENABLE
 #define DCPOWER
+//#define LIGHTSENS
 #define LANG_EN
 //#define MY_DEBUG
 //#define MY_PASSIVE_NODE
-#define MY_NODE_ID 101
+//#define MY_NODE_ID 101
 //#define MY_NRF5_ESB_MODE (NRF5_1MBPS)
 #define MY_NRF5_ESB_MODE (NRF5_250KBPS)
 #define MY_RESET_REASON_TEXT
 #define SN "EFEKTA WeatherStation 290"
-#define SV "0.30"
+#define SV "0.32"
 #define MY_RADIO_NRF5_ESB

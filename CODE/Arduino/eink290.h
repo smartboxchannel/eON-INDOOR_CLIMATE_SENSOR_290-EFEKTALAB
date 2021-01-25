@@ -22,6 +22,7 @@
 #define EINK290_H
 
 #include "eink.h"
+#include "MyConfig.h"
 
 // Display resolution
 #define EPD_WIDTH       128
@@ -35,10 +36,12 @@
 #define DATA_ENTRY_MODE_SETTING                     0x11
 #define SW_RESET                                    0x12
 #define TEMPERATURE_SENSOR_CONTROL                  0x1A
+#define BUILTINTEMPERATURE_SENSOR_CONTROL           0x18
 #define MASTER_ACTIVATION                           0x20
 #define DISPLAY_UPDATE_CONTROL_1                    0x21
 #define DISPLAY_UPDATE_CONTROL_2                    0x22
 #define WRITE_RAM                                   0x24
+#define WRITE_RAM2                                  0x26
 #define WRITE_VCOM_REGISTER                         0x2C
 #define WRITE_LUT_REGISTER                          0x32
 #define SET_DUMMY_LINE_PERIOD                       0x3A
@@ -54,30 +57,40 @@ extern const unsigned char lut_full_update[];
 extern const unsigned char lut_partial_update[];
 
 class Epd : EpdIf {
-public:
+  public:
     unsigned long width;
     unsigned long height;
 
     Epd();
     ~Epd();
-    int  Init(const unsigned char* lut);
+    int  InitV1(const unsigned char* lut);
+    int  InitV2();
     void SendCommand(unsigned char command);
     void SendData(unsigned char data);
     void WaitUntilIdle(void);
     void Reset(void);
     void SetFrameMemory(
-        const unsigned char* image_buffer,
-        int x,
-        int y,
-        int image_width,
-        int image_height
+      const unsigned char* image_buffer,
+      int x,
+      int y,
+      int image_width,
+      int image_height
+    );
+    void SetFrameMemoryFull(
+      const unsigned char* image_buffer,
+      int x,
+      int y,
+      int image_width,
+      int image_height
     );
     void SetFrameMemory(const unsigned char* image_buffer);
+    void SetFrameMemory_Base(const unsigned char* image_buffer);
     void ClearFrameMemory(unsigned char color);
     void DisplayFrame(void);
+    void DisplayFrameFull(void);
     void Sleep(void);
 
-private:
+  private:
     unsigned int reset_pin;
     unsigned int dc_pin;
     unsigned int cs_pin;

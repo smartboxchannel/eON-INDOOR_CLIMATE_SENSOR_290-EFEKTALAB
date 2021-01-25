@@ -50,6 +50,8 @@ extern "C"
 
 #ifdef EBYTE
 #define PIN_LED1             (2)
+#elif defined EBYTE2
+#define PIN_LED1             (3)
 #else
 #define PIN_LED1             (28)
 #endif
@@ -65,6 +67,9 @@ extern "C"
 #ifdef EBYTE
 #define PIN_BUTTON             (24)
 #define SOUND_PIN              (30)
+#elif defined EBYTE2
+#define PIN_BUTTON             (22)
+#define SOUND_PIN              (20)
 #else
 #define PIN_BUTTON             (27)
 #endif
@@ -99,6 +104,9 @@ static const uint8_t A7  = ADC_A7;
 #ifdef EBYTE
 #define PIN_SERIAL_RX       (10)
 #define PIN_SERIAL_TX       (9)
+#elif defined EBYTE2
+#define PIN_SERIAL_RX       (9)
+#define PIN_SERIAL_TX       (10)
 #else
 #define PIN_SERIAL_RX       (9)
 #define PIN_SERIAL_TX       (10)
@@ -120,6 +128,11 @@ static const uint8_t A7  = ADC_A7;
 #define PIN_SPI_MOSI         (15)
 #define PIN_SPI_SCK          (20)
 #define PIN_SPI_SS           (22)
+#elif defined EBYTE2
+#define PIN_SPI_MISO         (23) //not conected
+#define PIN_SPI_MOSI         (5)
+#define PIN_SPI_SCK          (30)
+#define PIN_SPI_SS           (31)
 #else
 #define PIN_SPI_MISO         (2) //not conected
 #define PIN_SPI_MOSI         (3)
@@ -142,6 +155,9 @@ static const uint8_t SCK  = PIN_SPI_SCK;
 #ifdef EBYTE
 #define PIN_WIRE_SDA         (28u)
 #define PIN_WIRE_SCL         (3u)
+#elif defined EBYTE2
+#define PIN_WIRE_SDA         (2u)
+#define PIN_WIRE_SCL         (28u)
 #else
 #define PIN_WIRE_SDA         (30u)
 #define PIN_WIRE_SCL         (29u)

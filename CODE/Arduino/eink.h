@@ -29,6 +29,11 @@
 #define DC_PIN          31
 #define CS_PIN          22
 #define BUSY_PIN        13
+#elif defined EBYTE2
+#define RST_PIN         13
+#define DC_PIN          29
+#define CS_PIN          31
+#define BUSY_PIN        24
 #else
 #define RST_PIN         17
 #define DC_PIN          12
@@ -38,12 +43,12 @@
 
 
 class EpdIf {
-public:
+  public:
     EpdIf(void);
     ~EpdIf(void);
 
     static int  IfInit(void);
-    static void DigitalWrite(int pin, int value); 
+    static void DigitalWrite(int pin, int value);
     static int  DigitalRead(int pin);
     static void DelayMs(unsigned int delaytime);
     static void SpiTransfer(unsigned char data);

@@ -2,11 +2,13 @@
 //                                                                                                                           //
 //        @filename   :   EFEKTA_THPEINK290_0.29.ino                                                                         //
 //        @brief en   :   Wireless, battery-operated temperature,humidity and pressure sensor(SHT20, SI7020, HTU21D, BME280) //
-//                        with electronic ink display(Good Display GDEH029A1). The extended version adds the MAX44009 light  //
-//                        sensor, an active bizzer Works on nRF52.                                                           //
+//                        with electronic ink display(Good Display GDEH029A1 OR GDEM029T94).                                 //
+//                        The extended version adds the MAX44009 light sensor, an active bizzer Works on nRF52.              //
 //        @brief ru   :   Беcпроводной, батарейный датчик температуры, влажности и давления(SHT20, SI7020, HTU21D, BME280)   //
-//                        с дисплеем на электронных чернилах(Good Display GDEH029A1). В расширенной версии добавлен          //
-//                        датчик света MAX44009, активный биззер. Работает на nRF52832, nRF52840.                            //
+//                        с дисплеем на электронных чернилах(Good Display GDEH029A1 или GDEM029T94).                         //
+//                        В расширенной версии добавлен  датчик света MAX44009, активный биззер.                             //
+//                        Работает на nRF52832, nRF52840.                                                                    //
+//                                                                                                                           //
 //        @author     :   Andrew Lamchenko aka Berk                                                                          //
 //                                                                                                                           //
 //        Copyright (C) EFEKTALAB 2020                                                                                       //
@@ -17,18 +19,18 @@
 //                                                                                                                           //
 // ######################################################################################################################### //
 
-
+#include <Wire.h>
 #include "MyConfig.h"
 #include <TimeLib.h>
 #include "eink290.h"
 #include "einkpaint.h"
 #include "einkimgdata.h"
-#ifdef EBYTE
+#ifdef LIGHTSENS
 #include <MAX44009.h>
 MAX44009 light;
 #endif
 
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
 #define MY_NRF5_ESB_PA_LEVEL (0x8UL)
 #else
 #define MY_NRF5_ESB_PA_LEVEL (0x4UL)
@@ -39,9 +41,16 @@ uint16_t minuteT = 60000;
 float tempThreshold = 0.33;
 float humThreshold = 1.5;
 float pressThreshold = 0.33;
+
+uint32_t stopTimer;
+uint32_t startTimer;
+uint32_t sleepTimeCount;
+uint32_t SLEEP_TIME;
 #ifdef WDTENABLE
 const uint32_t SLEEP_TIME_WDT = 10000;
-uint32_t sleepTimeCount;
+uint32_t PRECISION_TIME_WDT;
+#else
+uint32_t PRECISION_TIME;
 #endif
 
 
@@ -58,6 +67,8 @@ bool bch;
 bool pch;
 bool lch;
 bool fch;
+bool gch;
+bool qch;
 bool metric;
 bool timeReceived;
 bool configMode;
@@ -102,7 +113,7 @@ int16_t myid;
 int16_t mypar;
 int16_t old_mypar = -1;
 
-#ifdef EBYTE
+#ifdef LIGHTSENS
 float brightness;
 float old_brightness;
 float brightThreshold = 1.5;
@@ -112,11 +123,27 @@ uint16_t BATT_TIME;
 uint16_t BATT_COUNT;
 uint32_t configMillis;
 uint32_t previousMillis;
-uint32_t SLEEP_TIME;
 float batteryVoltageF;
-float temperature;
-float pressure;
-float humidity;
+float temperatureSens;
+float pressureSens;
+float humiditySens;
+#ifdef BME680
+float hum_weighting = 0.25; // so hum effect is 25% of the total air quality score
+float gas_weighting = 0.75; // so gas effect is 75% of the total air quality score
+float  humidity_score, gas_score;
+float air_quality_score;
+float old_air_quality_score;
+float air_quality_Threshold = 5.0;
+uint16_t IAQ_i;
+float IAQ_score;
+uint16_t old_IAQ_i;
+uint16_t IAQ_i_Threshold = 1;
+float gas_reference = 2500.0;
+float hum_reference = 40.0;
+bool getgasreference_count = false;
+float gas_lower_limit = 10000.0;  // Bad air quality limit
+float gas_upper_limit = 300000.0; // Good air quality limit
+#endif
 float old_temperature;
 float old_humidity;
 float old_pressure;
@@ -136,13 +163,19 @@ extern "C" {
 static app_gpiote_user_id_t m_gpiote_user_id;
 int16_t mtwr;
 #define MY_TRANSPORT_WAIT_READY_MS (mtwr)
+
 #include <MySensors.h>
+
 #define TEMP_CHILD_ID 0
 #define HUM_CHILD_ID 1
 #define BARO_CHILD_ID 2
 #define FORECAST_CHILD_ID 3
-#ifdef EBYTE
+#ifdef LIGHTSENS
 #define LUX_SENS_CHILD_ID 4
+#endif
+#ifdef BME680
+#define IAQ_INDEX_CHILD_ID 5
+#define AIR_QUALITY_CHILD_ID 6
 #endif
 #define SIGNAL_Q_ID 100
 #define BATTERY_VOLTAGE_ID 101
@@ -150,16 +183,22 @@ int16_t mtwr;
 #define SET_BATT_SEND_ID 103
 #define MY_SEND_RESET_REASON 105
 #define SET_COLOR_ID 106
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
 #define SET_SOUND_ID 107
 #endif
 MyMessage msgTemp(TEMP_CHILD_ID, V_TEMP);
 MyMessage msgHum(HUM_CHILD_ID, V_HUM);
 MyMessage msgPres(BARO_CHILD_ID, V_PRESSURE);
 MyMessage forecastMsg(FORECAST_CHILD_ID, V_VAR1);
-#ifdef EBYTE
+#ifdef LIGHTSENS
 MyMessage brightMsg(LUX_SENS_CHILD_ID, V_LEVEL);
+#endif
+#if defined EBYTE || defined EBYTE2
 MyMessage setSoundMsg(SET_SOUND_ID, V_VAR1);
+#endif
+#ifdef BME680
+MyMessage iaqIndex(IAQ_INDEX_CHILD_ID, V_LEVEL);
+MyMessage airQuality(AIR_QUALITY_CHILD_ID, V_VAR1);
 #endif
 MyMessage sqMsg(SIGNAL_Q_ID, V_VAR1);
 MyMessage bvMsg(BATTERY_VOLTAGE_ID, V_VAR1);
@@ -194,9 +233,14 @@ float pressureAvg2;               // Average after 2 hours is used as reference 
 float dP_dt;                      // Pressure delta over time
 
 #include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
-#define SEALEVELPRESSURE_HPA (1013.25)
+#ifdef BME680
+#include "Adafruit_BME680.h"
+Adafruit_BME680 bme;
+#else
+#include "Adafruit_BME280.h"
 Adafruit_BME280 bme;
+#endif
+#define SEALEVELPRESSURE_HPA (1013.25)
 
 
 void colorChange(bool flag) {
@@ -243,7 +287,7 @@ void DrawImageWH(Paint * paint, int x, int y, const unsigned char* imgData, int 
 
 
 void displayTemp(float temp, bool metr) {
-#ifdef EBYTE
+#ifdef LIGHTSENS
 #ifdef LANG_EN
   DrawImageWH(&paint, 3, 112, TEMPEN, 10, 72, colorPrint);
 #else
@@ -1043,7 +1087,7 @@ void displayTemp(float temp, bool metr) {
 }
 
 
-#ifdef EBYTE
+#ifdef LIGHTSENS
 void displayLux(float brig_temp) {
 
 #ifdef LANG_EN
@@ -1067,7 +1111,7 @@ void displayLux(float brig_temp) {
 
     switch (one_l) {
       case 0:
-        DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 167, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
@@ -1102,7 +1146,7 @@ void displayLux(float brig_temp) {
 
     switch (two_l) {
       case 0:
-        DrawImageWH(&paint, 85, 153, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 153, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 153, CD1, 16, 9, colorPrint);
@@ -1146,7 +1190,7 @@ void displayLux(float brig_temp) {
 
     switch (one_l) {
       case 0:
-        DrawImageWH(&paint, 85, 172, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 172, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 172, CD1, 16, 9, colorPrint);
@@ -1179,7 +1223,7 @@ void displayLux(float brig_temp) {
 
     switch (two_l) {
       case 0:
-        DrawImageWH(&paint, 85, 163, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 163, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 163, CD1, 16, 9, colorPrint);
@@ -1214,7 +1258,7 @@ void displayLux(float brig_temp) {
 
     switch (three_l) {
       case 0:
-        DrawImageWH(&paint, 85, 149, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 149, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 149, CD1, 16, 9, colorPrint);
@@ -1260,7 +1304,7 @@ void displayLux(float brig_temp) {
 
     switch (one_l) {
       case 0:
-        DrawImageWH(&paint, 85, 176, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 176, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 176, CD1, 16, 9, colorPrint);
@@ -1293,7 +1337,7 @@ void displayLux(float brig_temp) {
 
     switch (two_l) {
       case 0:
-        DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 167, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 167, CD1, 16, 9, colorPrint);
@@ -1326,7 +1370,7 @@ void displayLux(float brig_temp) {
 
     switch (three_l) {
       case 0:
-        DrawImageWH(&paint, 85, 158, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 158, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 158, CD1, 16, 9, colorPrint);
@@ -1361,7 +1405,7 @@ void displayLux(float brig_temp) {
 
     switch (four_l) {
       case 0:
-        DrawImageWH(&paint, 85, 144, CD1, 16, 9, colorPrint);
+        DrawImageWH(&paint, 85, 144, CD0, 16, 9, colorPrint);
         break;
       case 1:
         DrawImageWH(&paint, 85, 144, CD1, 16, 9, colorPrint);
@@ -2918,22 +2962,35 @@ void display_Table()
 
 
 void displayStart() {
-  epd.Init(lut_full_update);
+#ifdef EINK_V1
+  epd.InitV1(lut_full_update);
+#else
+  epd.InitV2();
+#endif
   epd.ClearFrameMemory(0xFF);   // bit set = white, bit reset = black
+#ifdef EINK_V1
   epd.DisplayFrame();
+#else
+  epd.DisplayFrameFull();
+#endif
   epd.ClearFrameMemory(0xFF);   // bit set = white, bit reset = black
   epd.DisplayFrame();
 
-  epd.Init(lut_partial_update);
+#ifdef EINK_V1
+  epd.InitV1(lut_partial_update);
+#endif
   paint.SetRotate(ROTATE_0);
   paint.SetWidth(128);
   paint.SetHeight(296);
   paint.Clear(opposite_colorPrint);
   DrawImageWH(&paint, 8, 80, LOGO, 110, 134, colorPrint);
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
+  //epd.DisplayFrameFull();
   epd.DisplayFrame();
   delay(2000);
 
+  epd.ClearFrameMemory(0xFF);   // bit set = white, bit reset = black
+  epd.DisplayFrame();
   paint.Clear(opposite_colorPrint);
 #ifdef LANG_EN
   DrawImageWH(&paint, 32, 51, CONECTEN, 64, 192, colorPrint);
@@ -2947,14 +3004,19 @@ void displayStart() {
 
 
 void displayUpdate(float t, float h, float p, int16_t f, bool m, bool hm) {
-  epd.Init(lut_partial_update);
+  //epd.Init(lut_partial_update);
+  epd.Reset();
   if (hm == false) {
     paint.SetWidth(128);
     paint.SetHeight(296);
     if (colorPrint == true) {
       epd.ClearFrameMemory(0x00);
       epd.DisplayFrame();
+      epd.ClearFrameMemory(0x00);
+      epd.DisplayFrame();
     } else {
+      epd.ClearFrameMemory(0xFF);
+      epd.DisplayFrame();
       epd.ClearFrameMemory(0xFF);
       epd.DisplayFrame();
     }
@@ -2964,7 +3026,7 @@ void displayUpdate(float t, float h, float p, int16_t f, bool m, bool hm) {
     displayTemp(t, m);
     displayPres(p, m);
     displayHum(h);
-#ifdef EBYTE
+#ifdef LIGHTSENS
     displayLux(brightness);
 #endif
     displayBatt(battery);
@@ -3012,7 +3074,8 @@ void clearOne() {
 
 
 void einkZeropush() {
-  epd.Init(lut_partial_update);
+  //epd.Init(lut_partial_update);
+  epd.Reset();
 
   if (colorPrint == true) {
     epd.ClearFrameMemory(0xFF);
@@ -3366,7 +3429,7 @@ void blinkLed () {
 
 
 void preHwInit() {
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
   pinMode(SOUND_PIN, OUTPUT);
   digitalWrite(SOUND_PIN, LOW);
 #endif
@@ -3379,7 +3442,7 @@ void preHwInit() {
 
 void before()
 {
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
   if (((NRF_UICR->PSELRESET[0] & UICR_PSELRESET_CONNECT_Msk) != (UICR_PSELRESET_CONNECT_Connected << UICR_PSELRESET_CONNECT_Pos)) ||
       ((NRF_UICR->PSELRESET[1] & UICR_PSELRESET_CONNECT_Msk) != (UICR_PSELRESET_CONNECT_Connected << UICR_PSELRESET_CONNECT_Pos))) {
     NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
@@ -3415,7 +3478,7 @@ void before()
   NRF_UART0->ENABLE = 0;
 #endif
 
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
   NRF_RADIO->TXPOWER = 0x8UL;
 #endif
 
@@ -3446,7 +3509,7 @@ void before()
     setSound = 1;
     saveState(107, setSound);
   }
-  setSound = 1;
+  //setSound = 1; // для теста, вкл. или выкл.
 
   timeConf();
   blinkLed ();
@@ -3466,7 +3529,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = sendSketchInfo(SN, SV);
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3475,7 +3538,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(TEMP_CHILD_ID, S_TEMP, "Temperature");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3484,7 +3547,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(HUM_CHILD_ID, S_HUM, "Humidity");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3493,7 +3556,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(BARO_CHILD_ID, S_BARO, "Pressure");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3502,16 +3565,36 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(FORECAST_CHILD_ID, S_CUSTOM, "Forecast");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
-#ifdef EBYTE
+
+#ifdef LIGHTSENS
   check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
   if (!check) {
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
+    _transportSM.failedUplinkTransmissions = 0;
+  }
+#endif
+#ifdef BME680
+  check = present(IAQ_INDEX_CHILD_ID, S_AIR_QUALITY, "IAQ INDEX");
+  if (!check) {
+    _transportSM.failedUplinkTransmissions = 0;
+    wait(shortWait);
+    check = present(IAQ_INDEX_CHILD_ID, S_AIR_QUALITY, "IAQ INDEX");
+    wait(shortWait * 3);
+    _transportSM.failedUplinkTransmissions = 0;
+  }
+
+  check = present(AIR_QUALITY_CHILD_ID, S_CUSTOM, "AIR QUALITY");
+  if (!check) {
+    _transportSM.failedUplinkTransmissions = 0;
+    wait(shortWait);
+    check = present(IAQ_INDEX_CHILD_ID, S_AIR_QUALITY, "IAQ INDEX");
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 #endif
@@ -3520,7 +3603,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(SIGNAL_Q_ID, S_CUSTOM, "SIGNAL %");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3529,7 +3612,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(BATTERY_VOLTAGE_ID, S_CUSTOM, "BATTERY VOLTAGE");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3538,7 +3621,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(SET_TIME_SEND_ID, S_CUSTOM, "T&H SEND INTERVAL | Min");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3547,7 +3630,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(SET_BATT_SEND_ID, S_CUSTOM, "BATT SEND INTERTVAL | H");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3556,7 +3639,7 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(MY_SEND_RESET_REASON, S_CUSTOM, "RESTART REASON");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
@@ -3565,22 +3648,22 @@ void presentation()
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(SET_COLOR_ID, S_CUSTOM, "COLOR W/B");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
   check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
   if (!check) {
     _transportSM.failedUplinkTransmissions = 0;
     wait(shortWait);
     check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
-    wait(shortWait * 2);
+    wait(shortWait * 3);
     _transportSM.failedUplinkTransmissions = 0;
   }
 #endif
 
-  wait(shortWait * 2);
+  wait(shortWait * 5);
   sendConfig();
   wait(shortWait);
 }
@@ -3591,9 +3674,13 @@ void setup() {
   config_Happy_node();
 
   if (flag_nogateway_mode == false) {
+#if defined EBYTE || defined EBYTE2
+    Sound();
+    wait(100);
+#endif
+
     requestTime();
     wait(2000, C_REQ, I_TIME);
-    //wait(300);
     sendResetReason();
   }
 
@@ -3609,7 +3696,7 @@ void setup() {
   bme_initAsleep();
   wait(100);
 
-#ifdef EBYTE
+#ifdef LIGHTSENS
   light.begin();
   wait(100);
 #endif
@@ -3617,11 +3704,6 @@ void setup() {
   readBatt();
 
   blinkLed ();
-  #ifdef EBYTE
-  Sound();
-  wait(500);
-  Sound();
-  #endif
 }
 
 
@@ -3633,10 +3715,13 @@ void loop() {
     present_only_parent();
   }
   if (isTransportReady() == true) {
+
+    if (flag_find_parent_process == true) {
+      find_parent_process();
+    }
+
     if (flag_nogateway_mode == false) {
-      if (flag_find_parent_process == true) {
-        find_parent_process();
-      }
+
 
       if (configMode == false) {
         if (buttIntStatus == PIN_BUTTON) {
@@ -3751,7 +3836,7 @@ void loop() {
               sendData();
               transportDisable();
               wait(shortWait);
-              displayUpdate(temperature, humidity, pressure, forecast, metric, ckeck_hm);
+              displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
               wait(shortWait);
               change = false;
             }
@@ -3764,7 +3849,7 @@ void loop() {
             sendData();
             transportDisable();
             wait(shortWait);
-            displayUpdate(temperature, humidity, pressure, forecast, metric, ckeck_hm);
+            displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
             wait(shortWait);
             change = false;
           }
@@ -3880,7 +3965,7 @@ void loop() {
               transportDisable();
             }
             wait(shortWait);
-            displayUpdate(temperature, humidity, pressure, forecast, metric, ckeck_hm);
+            displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
             wait(shortWait);
           }
           sleepTimeCount = 0;
@@ -3904,7 +3989,7 @@ void loop() {
             transportDisable();
           }
           wait(shortWait);
-          displayUpdate(temperature, humidity, pressure, forecast, metric, ckeck_hm);
+          displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
           wait(shortWait);
         }
 #endif
@@ -3930,10 +4015,56 @@ void loop() {
   if (nosleep == false) {
     wdt_nrfReset();
     transportDisable();
+
 #ifdef WDTENABLE
+
+    uint32_t periodTimer;
+    uint32_t quotientTimer;
+    stopTimer = millis();
+    if (stopTimer < startTimer) {
+      periodTimer = (4294967295 - startTimer) + stopTimer;
+    } else {
+      periodTimer = stopTimer - startTimer;
+    }
+    if (periodTimer >= SLEEP_TIME_WDT) {
+      quotientTimer = periodTimer / SLEEP_TIME_WDT;
+      if (quotientTimer == 0) {
+        PRECISION_TIME_WDT = periodTimer - SLEEP_TIME_WDT;
+        sleepTimeCount++;
+      } else {
+        PRECISION_TIME_WDT = periodTimer - SLEEP_TIME_WDT * quotientTimer;
+        sleepTimeCount = sleepTimeCount + quotientTimer;
+      }
+    } else {
+      PRECISION_TIME_WDT = SLEEP_TIME_WDT - periodTimer;
+    }
+
     hwSleep(SLEEP_TIME_WDT);
+    startTimer = millis();
 #else
+    uint32_t periodTimer;
+    uint32_t quotientTimer;
+    stopTimer = millis();
+    if (stopTimer < startTimer) {
+      periodTimer = (4294967295 - startTimer) + stopTimer;
+    } else {
+      periodTimer = stopTimer - startTimer;
+    }
+    if (periodTimer >= SLEEP_TIME) {
+      quotientTimer = periodTimer / SLEEP_TIME;
+      if (quotientTimer == 0) {
+        PRECISION_TIME = periodTimer - SLEEP_TIME;
+        sleepTimeCount++;
+      } else {
+        PRECISION_TIME = periodTimer - SLEEP_TIME * quotientTimer;
+        sleepTimeCount = sleepTimeCount + quotientTimer;
+      }
+    } else {
+      PRECISION_TIME = SLEEP_TIME - periodTimer;
+    }
+
     hwSleep(SLEEP_TIME);
+    startTimer = millis();
 #endif
     nosleep = true;
   }
@@ -3941,50 +4072,89 @@ void loop() {
 
 
 void bme_initAsleep() {
-  if (! bme.begin(&Wire)) {
+  if (! bme.begin()) {
     while (1);
   }
+#ifdef BME680
+  bme.setTemperatureOversampling(BME680_OS_1X);
+  bme.setHumidityOversampling(BME680_OS_1X);
+  bme.setPressureOversampling(BME680_OS_1X);
+  bme.setIIRFilterSize(BME680_FILTER_SIZE_1);
+  bme.setGasHeater(320, 250); // 320*C for 150 ms
+  GetGasReference();
+  //wait(250);
+#else
   bme.setSampling(Adafruit_BME280::MODE_FORCED,
                   Adafruit_BME280::SAMPLING_X1, // temperature
-                  Adafruit_BME280::SAMPLING_X1, // pressure
+                  Adafruit_BME280::SAMPLING_X2, // pressure
                   Adafruit_BME280::SAMPLING_X1, // humidity
-                  Adafruit_BME280::FILTER_OFF   );
+                  Adafruit_BME280::FILTER_X2   );
   wait(500);
+#endif
 }
 
 
 void readData() {
+#ifdef BME680
+  bme.performReading();
+#else
   bme.takeForcedMeasurement();
-  wait(shortWait);
-  temperature = bme.readTemperature();
+#endif
+  //wait(300);
+#ifdef BME680
+  temperatureSens = bme.readTemperature() - 1.6F;
+  pressureSens = bme.readPressure() / 100.0F;
+#else
+  temperatureSens = bme.readTemperature();
+  pressureSens = bme.readPressure() / 100.0F;
+#endif
+  forecast = sample(pressureSens);
   //wait(shortWait);
-  pressure = bme.readPressure() / 100.0F;
-  forecast = sample(pressure);
-  //wait(shortWait);
+  chek_h = true;
   if (chek_h == true) {
-    humidity = bme.readHumidity();
+#ifdef BME680
+    humiditySens = bme.readHumidity() + 5.0F;
+#else
+    humiditySens = bme.readHumidity();
+#endif
     wait(shortWait);
-    if ((int)humidity < 0) {
-      humidity = 0.0;
+    if ((int)humiditySens < 0) {
+      humiditySens = 0.0;
     }
-    if ((int)humidity > 99) {
-      humidity = 99.9;
+    if ((int)humiditySens > 99) {
+      humiditySens = 99.9;
     }
     chek_h = false;
   } else {
     chek_h = true;
   }
-  if ((int)temperature < 0) {
-    temperature = 0.0;
+
+#ifdef BME680
+  GetGasReference();
+  //wait(150);
+  humidity_score = GetHumidityScore();
+  gas_score      = GetGasScore();
+  air_quality_score = humidity_score + gas_score;
+  //if (getgasreference_count == true){
+  //GetGasReference();
+  // }
+  CalculateIAQ(air_quality_score);
+  //if ((getgasreference_count++) % 5 == 0) GetGasReference();
+  //GetGasReference();
+  //getgasreference_count =!getgasreference_count;
+#endif
+
+  if ((int)temperatureSens < 0) {
+    temperatureSens = 0.0;
   }
-  if ((int)temperature > 99) {
-    temperature = 99.9;
+  if ((int)temperatureSens > 99) {
+    temperatureSens = 99.9;
   }
-  if ((int)pressure < 300) {
-    pressure = 300.0;
+  if ((int)pressureSens < 300) {
+    pressureSens = 300.0;
   }
-  if ((int)pressure > 1100) {
-    pressure = 1100.0;
+  if ((int)pressureSens > 1100) {
+    pressureSens = 1100.0;
   }
   if (forecast != old_forecast) {
     change = true;
@@ -4002,28 +4172,41 @@ void readData() {
     }
   }
   if (!metric) {
-    temperature = temperature * 9.0 / 5.0 + 32.0;
+    temperatureSens = temperatureSens * 9.0F / 5.0F + 32.0F;
   } else {
-    pressure = pressure * 0.75006375541921;
+    pressureSens = pressureSens * 0.75006375541921F;
   }
-  if (abs(temperature - old_temperature) >= tempThreshold) {
-    old_temperature = temperature;
+  if (abs(temperatureSens - old_temperature) >= tempThreshold) {
+    old_temperature = temperatureSens;
     change = true;
     tch = true;
   }
-  if (abs(pressure - old_pressure) >= pressThreshold) {
-    old_pressure = pressure;
+  if (abs(pressureSens - old_pressure) >= pressThreshold) {
+    old_pressure = pressureSens;
     change = true;
     pch = true;
   }
-  if (abs(humidity - old_humidity) >= humThreshold) {
-    old_humidity = humidity;
+  if (abs(humiditySens - old_humidity) >= humThreshold) {
+    old_humidity = humiditySens;
     change = true;
     hch = true;
   }
 
-#ifdef EBYTE
-  brightness = light.get_lux() * 5.0;
+#ifdef BME680
+  if (abs(IAQ_score - old_air_quality_score) >= air_quality_Threshold) {
+    old_air_quality_score = IAQ_score;
+    change = true;
+    gch = true;
+    //CalculateIAQ(air_quality_score);
+    if (abs(IAQ_i - old_IAQ_i) >= IAQ_i_Threshold) {
+      old_IAQ_i = IAQ_i;
+      qch = true;
+    }
+  }
+#endif
+
+#ifdef LIGHTSENS
+  brightness = light.get_lux() * 3.7;
   wait(30);
 
   if (abs(brightness - old_brightness) >= brightThreshold) {
@@ -4032,8 +4215,6 @@ void readData() {
     lch = true;
   }
 #endif
-
-
 
   BATT_COUNT++;
   CORE_DEBUG(PSTR("BATT_COUNT: %d\n"), BATT_COUNT);
@@ -4058,15 +4239,15 @@ void sendData() {
   if (flag_nogateway_mode == false) {
     if (timeSend != 0) {
       if (tch == true) {
-        check = send(msgTemp.setDestination(0).set(temperature, 2));
+        check = send(msgTemp.setDestination(0).set(temperatureSens, 2));
         if (check == false) {
           _transportSM.failedUplinkTransmissions = 0;
           wait(shortWait * 4);
-          check = send(msgTemp.setDestination(0).set(temperature, 2));
+          check = send(msgTemp.setDestination(0).set(temperatureSens, 2));
           if (check == false) {
             wait(shortWait * 8);
             _transportSM.failedUplinkTransmissions = 0;
-            check = send(msgTemp.setDestination(0).set(temperature, 2));
+            check = send(msgTemp.setDestination(0).set(temperatureSens, 2));
             wait(shortWait * 2);
           }
         }
@@ -4075,15 +4256,15 @@ void sendData() {
         blinkEnable = true;
       }
       if (hch == true) {
-        check = send(msgHum.setDestination(0).set(humidity, 2));
+        check = send(msgHum.setDestination(0).set(humiditySens, 2));
         if (check == false) {
           _transportSM.failedUplinkTransmissions = 0;
           wait(shortWait * 4);
-          check = send(msgHum.setDestination(0).set(humidity, 2));
+          check = send(msgHum.setDestination(0).set(humiditySens, 2));
           if (check == false) {
             wait(shortWait * 8);
             _transportSM.failedUplinkTransmissions = 0;
-            check = send(msgHum.setDestination(0).set(humidity, 2));
+            check = send(msgHum.setDestination(0).set(humiditySens, 2));
             wait(shortWait * 2);
           }
         }
@@ -4092,15 +4273,15 @@ void sendData() {
         blinkEnable = true;
       }
       if (pch == true) {
-        check = send(msgPres.setDestination(0).set(pressure, 2));
+        check = send(msgPres.setDestination(0).set(pressureSens, 2));
         if (check == false) {
           _transportSM.failedUplinkTransmissions = 0;
           wait(shortWait * 4);
-          check = send(msgPres.setDestination(0).set(pressure, 2));
+          check = send(msgPres.setDestination(0).set(pressureSens, 2));
           if (check == false) {
             wait(shortWait * 8);
             _transportSM.failedUplinkTransmissions = 0;
-            check = send(msgPres.setDestination(0).set(pressure, 2));
+            check = send(msgPres.setDestination(0).set(pressureSens, 2));
             wait(shortWait * 2);
           }
         }
@@ -4119,7 +4300,32 @@ void sendData() {
         fch = false;
         blinkEnable = true;
       }
-#ifdef EBYTE
+
+#ifdef BME680
+      if (gch == true) {
+        check = send(iaqIndex.set(IAQ_score, 1));
+        if (check == false) {
+          _transportSM.failedUplinkTransmissions = 0;
+          wait(50);
+          check = send(iaqIndex.set(IAQ_score, 1));
+          wait(50);
+        }
+        gch = false;
+        blinkEnable = true;
+      }
+      if (qch == true) {
+        check = send(airQuality.set(IAQ_i));
+        if (check == false) {
+          _transportSM.failedUplinkTransmissions = 0;
+          wait(50);
+          check = send(airQuality.set(IAQ_i));
+          wait(50);
+        }
+        qch = false;
+        blinkEnable = true;
+      }
+#endif
+#ifdef LIGHTSENS
       if (lch == true) {
         check = send(brightMsg.setDestination(0).set(brightness, 2));
         if (check == false) {
@@ -4155,7 +4361,7 @@ void sendData() {
     }
     if (blinkEnable == true) {
       blinkLed();
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
       //Sound();
 #endif
     }
@@ -4174,7 +4380,7 @@ void sendData() {
     bch = false;
     pch = false;
     fch = false;
-#ifdef EBYTE
+#ifdef LIGHTSENS
     lch = false;
 #endif
   }
@@ -4288,13 +4494,13 @@ static __INLINE uint8_t battery_level_in_percent(const uint16_t mvolts)
 {
   uint8_t battery_level;
 
-  if (mvolts >= 3000)
+  if (mvolts >= 3100)
   {
     battery_level = 100;
   }
   else if (mvolts > 2900)
   {
-    battery_level = 100 - ((3000 - mvolts) * 20) / 100;
+    battery_level = 100 - ((3100 - mvolts) * 20) / 200;
   }
   else if (mvolts > 2750)
   {
@@ -4395,7 +4601,7 @@ void sendConfig() {
     _transportSM.failedUplinkTransmissions = 0;
   }
 
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
   check = send(setSoundMsg.set(setSound));
   if (check == false) {
     _transportSM.failedUplinkTransmissions = 0;
@@ -4505,7 +4711,7 @@ void receive(const MyMessage & message)
       }
     }
 
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
     if (message.sensor == SET_SOUND_ID) {
       if (message.type == V_VAR1) {
         setSound = message.getBool();
@@ -4550,7 +4756,7 @@ void gpiote_event_handler(uint32_t event_pins_low_to_high, uint32_t event_pins_h
   }
 }
 
-#ifdef EBYTE
+#if defined EBYTE || defined EBYTE2
 void Sound() {
   if (setSound == 1) {
     myTone(400, 10);
@@ -4594,6 +4800,64 @@ void new_device() {
   saveState(200, 255);
   hwReboot();
 }
+
+
+// ####################################################################################################
+// #                                                                                                  #
+// #            These functions are only included if the forecast function is enables.                #
+// #          The are used to generate a weater prediction by checking if the barometric              #
+// #                          pressure is rising or falling over time.                                #
+// #                                                                                                  #
+// ####################################################################################################
+#ifdef BME680
+void GetGasReference() {
+  // Now run the sensor for a burn-in period, then use combination of relative humidity and gas resistance to estimate indoor air quality as a percentage.
+  int readings = 5;
+  for (int i = 1; i <= readings; i++) { // read gas for 5 x 0.150mS = 1.250secs
+    gas_reference += bme.readGas();
+  }
+  gas_reference = gas_reference / (float)readings;
+}
+
+void CalculateIAQ(float score) {
+  //IAQ_i;
+  //IAQ_score;
+  score = (101.0 - score) * 7.5;
+  IAQ_score = score;
+  if      ((int)score >= 301)                  IAQ_i = 6;
+  else if ((int)score >= 201 && (int)score <= 300 ) IAQ_i = 5;
+  else if ((int)score >= 176 && (int)score <= 200 ) IAQ_i = 4;
+  else if ((int)score >= 151 && (int)score <= 175 ) IAQ_i = 3;
+  else if ((int)score >=  51 && (int)score <= 150 ) IAQ_i = 2;
+  else if ((int)score >=  00 && (int)score <=  50 ) IAQ_i = 1;
+}
+
+float GetHumidityScore() {  //Calculate humidity contribution to IAQ index
+  float current_humidity = bme.readHumidity();
+  if ((int)current_humidity >= 38 && (int)current_humidity <= 42) // Humidity +/-5% around optimum
+    humidity_score = 0.25 * 100.0;
+  else
+  { // Humidity is sub-optimal
+    if ((int)current_humidity < 38)
+      humidity_score = 0.25 / hum_reference * current_humidity * 100.0;
+    else
+    {
+      humidity_score = ((-0.25 / (100.0 - hum_reference) * current_humidity) + 0.416666) * 100.0;
+    }
+  }
+  return humidity_score;
+}
+
+float GetGasScore() {
+  //Calculate gas contribution to IAQ index
+  gas_score = (0.75 / (gas_upper_limit - gas_lower_limit) * gas_reference - (gas_lower_limit * (0.75 / (gas_upper_limit - gas_lower_limit)))) * 100.0;
+  if ((int)gas_score > 75) gas_score = 75.0; // Sometimes gas readings can go outside of expected scale maximum
+  if ((int)gas_score <  0) gas_score = 0.0;  // Sometimes gas readings can go outside of expected scale minimum
+  return gas_score;
+}
+#endif
+
+
 
 
 // ####################################################################################################
@@ -4741,9 +5005,9 @@ void happy_init() {
   CORE_DEBUG(PSTR("USER MEMORY SECTOR NODE ID: %d\n"), loadState(200));
 
   if (hwReadConfig(EEPROM_NODE_ID_ADDRESS) == 255) {
-    mtwr = 0;
+    mtwr = 30000;
   } else {
-    mtwr = 15000;
+    mtwr = 10000;
     no_present();
   }
   CORE_DEBUG(PSTR("MY_TRANSPORT_WAIT_MS: %d\n"), mtwr);
@@ -4751,15 +5015,28 @@ void happy_init() {
 
 
 void config_Happy_node() {
-  if (mtwr == 0) {
+  if (mtwr == 30000) {
     myid = getNodeId();
     saveState(200, myid);
-    mypar = _transportConfig.parentNodeId;
-    old_mypar = mypar;
-    saveState(201, mypar);
-    saveState(202, _transportConfig.distanceGW);
+    if (isTransportReady() == true) {
+      mypar = _transportConfig.parentNodeId;
+      old_mypar = mypar;
+      saveState(201, mypar);
+      saveState(202, _transportConfig.distanceGW);
+    }
+    if (isTransportReady() == false)
+    {
+      no_present();
+      err_delivery_beat = 7;
+      _transportConfig.nodeId = myid;
+      _transportConfig.parentNodeId = loadState(201);
+      _transportConfig.distanceGW = loadState(202);
+      mypar = _transportConfig.parentNodeId;
+      happy_node_mode();
+      gateway_fail();
+    }
   }
-  if (mtwr != 0) {
+  if (mtwr != 30000) {
     myid = getNodeId();
     if (myid != loadState(200)) {
       saveState(200, myid);
