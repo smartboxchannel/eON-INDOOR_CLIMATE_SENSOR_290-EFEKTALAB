@@ -2,7 +2,7 @@
 
 Temperature, humidity and pressure sensor with 2.9 e-ink display.
 
-#### Donate: paypal.me/efektalab
+#### Donate: https://paypal.me/efektalab
 
 Sale: https://www.tindie.com/products/diyberk/wireless-mini-weather-station-29-inch-e-paper/
 
