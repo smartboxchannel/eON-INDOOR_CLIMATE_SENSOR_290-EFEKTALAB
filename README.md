@@ -1,8 +1,8 @@
 # EFEKTA EINK2.9 Inch TEMP-HUM-PRES WEATHER MINI STATION ON NRF52
 
-Temperature, humidity and pressure sensor with 2.9 e-ink display.
+Temperature, humidity, pressure and light sensor with 2.9 e-ink display.
 
-#### Donate: https://paypal.me/efektalab
+#### Don't donate to me, it doesn't work in this world: https://paypal.me/efektalab , just buy:
 
 Sale: https://www.tindie.com/products/diyberk/wireless-mini-weather-station-29-inch-e-paper/
 
