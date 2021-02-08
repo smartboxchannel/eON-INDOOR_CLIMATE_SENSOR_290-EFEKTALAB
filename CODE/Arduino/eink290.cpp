@@ -142,9 +142,9 @@ void Epd::WaitUntilIdle(void) {
   while(1) {   //=1 BUSY
     if(DigitalRead(busy_pin)==LOW) 
       break;
-    DelayMs(20);
+    DelayMs(30);
   }
-  DelayMs(20);
+  DelayMs(60);
 }
 
 /**

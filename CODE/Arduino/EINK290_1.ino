@@ -21,7 +21,6 @@
 
 #include <Wire.h>
 #include "MyConfig.h"
-#include <TimeLib.h>
 #include "eink290.h"
 #include "einkpaint.h"
 #include "einkimgdata.h"
@@ -40,27 +39,46 @@ const uint16_t shortWait = 40;
 uint16_t minuteT = 60000;
 float tempThreshold = 0.33;
 float humThreshold = 1.5;
-float pressThreshold = 0.33;
+float pressThreshold = 0.5;
 
 uint32_t stopTimer;
 uint32_t startTimer;
 uint32_t sleepTimeCount;
 uint32_t SLEEP_TIME;
-#ifdef WDTENABLE
 const uint32_t SLEEP_TIME_WDT = 10000;
 uint32_t PRECISION_TIME_WDT;
-#else
 uint32_t PRECISION_TIME;
-#endif
 
+bool needPresent;
+bool mesInfo;
+bool mesTemp;
+bool mesHum;
+bool mesBaro;
+bool mesForec;
+bool mesLux;
+bool mesSig;
+bool mesBat;
+bool mesTimeset;
+bool mesBatset;
+bool mesRes;
+bool mesColorset;
+#ifdef LIGHTSENS
+bool mesLux;
+#endif
+#ifdef BIZZER
+bool mesSoundset;
+bool changeBiz = true;
+#endif
+bool changeT = true;
+bool changeB = true;
+bool changeC = true;
+bool sendAfterResTask;
 
 bool setSound;
-bool ckeck_hm;
 bool colorPrint;
 bool opposite_colorPrint;
 bool change;
 bool check;
-bool chek_h = true;
 bool tch;
 bool hch;
 bool bch;
@@ -69,7 +87,7 @@ bool lch;
 bool fch;
 bool gch;
 bool qch;
-bool metric;
+bool metric = false;
 bool timeReceived;
 bool configMode;
 bool button_flag;
@@ -85,20 +103,6 @@ bool updateink2;
 bool updateink3;
 bool updateink4;
 bool updateinkclear;
-const int timeZone = 3;
-uint8_t year_one;
-uint8_t year_two;
-uint8_t year_three;
-uint8_t year_four;
-uint8_t month_one;
-uint8_t month_two;
-uint8_t day_one;
-uint8_t day_two;
-uint8_t minutePrint;
-uint8_t minute_one;
-uint8_t minute_two;
-uint8_t hour_one;
-uint8_t hour_two;
 uint8_t battery;
 uint8_t old_battery;
 uint8_t cpNom;
@@ -106,7 +110,6 @@ uint8_t cpCount;
 uint8_t timeSend;
 uint8_t battSend;
 uint8_t err_delivery_beat;
-uint8_t problem_mode_count;
 uint16_t batteryVoltage;
 int16_t nRFRSSI;
 int16_t myid;
@@ -127,32 +130,17 @@ float batteryVoltageF;
 float temperatureSens;
 float pressureSens;
 float humiditySens;
-#ifdef BME680
-float hum_weighting = 0.25; // so hum effect is 25% of the total air quality score
-float gas_weighting = 0.75; // so gas effect is 75% of the total air quality score
-float  humidity_score, gas_score;
-float air_quality_score;
-float old_air_quality_score;
-float air_quality_Threshold = 5.0;
-uint16_t IAQ_i;
-float IAQ_score;
-uint16_t old_IAQ_i;
-uint16_t IAQ_i_Threshold = 1;
-float gas_reference = 2500.0;
-float hum_reference = 40.0;
-bool getgasreference_count = false;
-float gas_lower_limit = 10000.0;  // Bad air quality limit
-float gas_upper_limit = 300000.0; // Good air quality limit
-#endif
 float old_temperature;
 float old_humidity;
 float old_pressure;
-unsigned char image[6000];
+unsigned char image[5000];
 Paint paint(image, 0, 0);
 Epd epd;
+
 // ##############################################################################################################
 // #                                                 INTERRUPT                                                  #
 // ##############################################################################################################
+
 uint32_t PIN_BUTTON_MASK;
 volatile byte buttIntStatus = 0;
 #define APP_GPIOTE_MAX_USERS 1
@@ -173,17 +161,13 @@ int16_t mtwr;
 #ifdef LIGHTSENS
 #define LUX_SENS_CHILD_ID 4
 #endif
-#ifdef BME680
-#define IAQ_INDEX_CHILD_ID 5
-#define AIR_QUALITY_CHILD_ID 6
-#endif
 #define SIGNAL_Q_ID 100
 #define BATTERY_VOLTAGE_ID 101
 #define SET_TIME_SEND_ID 102
 #define SET_BATT_SEND_ID 103
 #define MY_SEND_RESET_REASON 105
 #define SET_COLOR_ID 106
-#if defined EBYTE || defined EBYTE2
+#ifdef BIZZER
 #define SET_SOUND_ID 107
 #endif
 MyMessage msgTemp(TEMP_CHILD_ID, V_TEMP);
@@ -193,12 +177,8 @@ MyMessage forecastMsg(FORECAST_CHILD_ID, V_VAR1);
 #ifdef LIGHTSENS
 MyMessage brightMsg(LUX_SENS_CHILD_ID, V_LEVEL);
 #endif
-#if defined EBYTE || defined EBYTE2
+#ifdef BIZZER
 MyMessage setSoundMsg(SET_SOUND_ID, V_VAR1);
-#endif
-#ifdef BME680
-MyMessage iaqIndex(IAQ_INDEX_CHILD_ID, V_LEVEL);
-MyMessage airQuality(AIR_QUALITY_CHILD_ID, V_VAR1);
 #endif
 MyMessage sqMsg(SIGNAL_Q_ID, V_VAR1);
 MyMessage bvMsg(BATTERY_VOLTAGE_ID, V_VAR1);
@@ -233,13 +213,8 @@ float pressureAvg2;               // Average after 2 hours is used as reference 
 float dP_dt;                      // Pressure delta over time
 
 #include <Adafruit_Sensor.h>
-#ifdef BME680
-#include "Adafruit_BME680.h"
-Adafruit_BME680 bme;
-#else
 #include "Adafruit_BME280.h"
 Adafruit_BME280 bme;
-#endif
 #define SEALEVELPRESSURE_HPA (1013.25)
 
 
@@ -252,13 +227,6 @@ void colorChange(bool flag) {
     opposite_colorPrint = true;
   }
   saveState(106, flag);
-}
-
-
-void receiveTime(unsigned long controllerTime2) {
-  unsigned long controllerTime = controllerTime2 + timeZone * SECS_PER_HOUR;
-  setTime(controllerTime);
-  timeReceived = true;
 }
 
 
@@ -2297,663 +2265,6 @@ void displayForecast(uint8_t f) {
 }
 
 
-void displayDMY() {
-  int yearPrint = year();
-  if (timeReceived) {
-
-    year_one = yearPrint / 1000;
-    year_two = yearPrint % 1000 / 100;
-    year_three = yearPrint % 100 / 10;
-    year_four = yearPrint % 10;
-    switch (year_four) {
-      case 0:
-        DrawImageWH(&paint, 2, 6, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 6, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 6, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 6, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 6, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 6, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 6, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 6, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 6, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 6, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (year_three) {
-      case 0:
-        DrawImageWH(&paint, 2, 15, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 15, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 15, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 15, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 15, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 15, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 15, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 15, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 15, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 15, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (year_two) {
-      case 0:
-        DrawImageWH(&paint, 2, 24, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 24, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 24, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 24, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 24, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 24, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 24, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 24, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 24, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 24, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (year_one) {
-      case 0:
-        DrawImageWH(&paint, 2, 33, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 33, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 33, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 33, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 33, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 33, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 33, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 33, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 33, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 33, CD9, 16, 9, colorPrint);
-        break;
-    }
-    DrawImageWH(&paint, 2, 42, CDP, 16, 5, colorPrint);
-
-
-    int monthPrint = month();
-    if (monthPrint > 9) {
-      month_one = monthPrint / 10;
-      month_two = monthPrint % 10;
-    } else {
-      month_one = 0;
-      month_two = monthPrint;
-    }
-    switch (month_two) {
-      case 0:
-        DrawImageWH(&paint, 2, 47, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 47, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 47, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 47, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 47, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 47, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 47, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 47, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 47, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 47, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (month_one) {
-      case 0:
-        DrawImageWH(&paint, 2, 56, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 56, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 56, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 56, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 56, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 56, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 56, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 56, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 56, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 56, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    DrawImageWH(&paint, 2, 65, CDP, 16, 5, colorPrint);
-
-    int dayPrint = day();
-    if (dayPrint > 9) {
-      day_one = dayPrint / 10;
-      day_two = dayPrint % 10;
-    } else {
-      day_one = 0;
-      day_two = dayPrint;
-    }
-
-    switch (day_two) {
-      case 0:
-        DrawImageWH(&paint, 2, 70, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 70, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 70, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 70, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 70, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 70, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 70, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 70, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 70, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 70, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (day_one) {
-      case 0:
-        DrawImageWH(&paint, 2, 79, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 2, 79, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 79, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 79, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 79, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 79, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 79, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 79, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 2, 79, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 2, 79, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-
-    DrawImageWH(&paint, 2, 244, CDP2, 16, 5, colorPrint);
-    int weekdayPrint = weekday(); // Sunday is day 1
-#ifdef LANG_EN
-    switch (weekdayPrint) {
-      case 1:
-        DrawImageWH(&paint, 2, 214, SUNDAYEN, 16, 30, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 214, MONDAYEN, 16, 30, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 214, TUESDAYEN, 16, 30, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 214, WEDNESDAYEN, 16, 30, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 214, THURSDAYEN, 16, 30, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 214, FRIDAYEN, 16, 30, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 214, SATURDAYEN, 16, 30, colorPrint);
-        break;
-    }
-#else
-    switch (weekdayPrint) {
-      case 1:
-        DrawImageWH(&paint, 2, 214, SUNDAY, 16, 30, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 2, 214, MONDAY, 16, 30, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 2, 214, TUESDAY, 16, 30, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 2, 214, WEDNESDAY, 16, 30, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 2, 214, THURSDAY, 16, 30, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 2, 214, FRIDAY, 16, 30, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 2, 214, SATURDAY, 16, 30, colorPrint);
-        break;
-    }
-#endif
-  }
-}
-
-
-void displayHM(bool hm) {
-  if (timeReceived) {
-    if (hm == false) {
-      int hourPrint = hour();
-      if (hourPrint > 9) {
-        hour_one = hourPrint / 10;
-        hour_two = hourPrint % 10;
-      } else {
-        hour_one = 0;
-        hour_two = hourPrint;
-      }
-      switch (hour_two) {
-        case 0:
-          DrawImageWH(&paint, 2, 272, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 272, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 272, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 272, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 272, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 272, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 272, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 272, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 272, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 272, CD9, 16, 9, colorPrint);
-          break;
-      }
-
-      switch (hour_one) {
-        case 0:
-          DrawImageWH(&paint, 2, 281, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 281, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 281, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 281, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 281, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 281, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 281, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 281, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 281, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 281, CD9, 16, 9, colorPrint);
-          break;
-      }
-
-      DrawImageWH(&paint, 2, 267, CD2P, 16, 5, colorPrint);
-
-      int minutePrint = minute();
-      if (minutePrint > 9) {
-        minute_one = minutePrint / 10;
-        minute_two = minutePrint % 10;
-      } else {
-        minute_one = 0;
-        minute_two = minutePrint;
-      }
-      switch (minute_two) {
-        case 0:
-          DrawImageWH(&paint, 2, 249, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 249, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 249, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 249, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 249, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 249, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 249, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 249, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 249, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 249, CD9, 16, 9, colorPrint);
-          break;
-      }
-
-      switch (minute_one) {
-        case 0:
-          DrawImageWH(&paint, 2, 258, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 258, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 258, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 258, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 258, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 258, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 258, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 258, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 258, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 258, CD9, 16, 9, colorPrint);
-          break;
-      }
-    } else {
-      int hourPrint = hour();
-      if (hourPrint > 9) {
-        hour_one = hourPrint / 10;
-        hour_two = hourPrint % 10;
-      } else {
-        hour_one = 0;
-        hour_two = hourPrint;
-      }
-      switch (hour_two) {
-        case 0:
-          DrawImageWH(&paint, 2, 23, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 23, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 23, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 23, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 23, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 23, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 23, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 23, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 23, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 23, CD9, 16, 9, colorPrint);
-          break;
-      }
-
-      switch (hour_one) {
-        case 0:
-          DrawImageWH(&paint, 2, 32, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 32, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 32, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 32, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 32, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 32, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 32, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 32, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 32, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 32, CD9, 16, 9, colorPrint);
-          break;
-      }
-
-      DrawImageWH(&paint, 2, 18, CD2P, 16, 5, colorPrint);
-
-      int minutePrint = minute();
-      if (minutePrint > 9) {
-        minute_one = minutePrint / 10;
-        minute_two = minutePrint % 10;
-      } else {
-        minute_one = 0;
-        minute_two = minutePrint;
-      }
-      switch (minute_two) {
-        case 0:
-          DrawImageWH(&paint, 2, 0, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 0, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 0, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 0, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 0, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 0, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 0, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 0, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 0, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 0, CD9, 16, 9, colorPrint);
-          break;
-      }
-
-      switch (minute_one) {
-        case 0:
-          DrawImageWH(&paint, 2, 9, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 2, 9, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 2, 9, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 2, 9, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 2, 9, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 2, 9, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 2, 9, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 2, 9, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 2, 9, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 2, 9, CD9, 16, 9, colorPrint);
-          break;
-      }
-      ckeck_hm = false;
-    }
-  }
-}
-
-
 void display_Table()
 {
   paint.DrawVerticalLine(110, 0, 74, colorPrint);
@@ -3003,54 +2314,36 @@ void displayStart() {
 }
 
 
-void displayUpdate(float t, float h, float p, int16_t f, bool m, bool hm) {
+void displayUpdate(float t, float h, float p, int16_t f, bool m) {
   //epd.Init(lut_partial_update);
   epd.Reset();
-  if (hm == false) {
-    paint.SetWidth(128);
-    paint.SetHeight(296);
-    if (colorPrint == true) {
-      epd.ClearFrameMemory(0x00);
-      epd.DisplayFrame();
-      epd.ClearFrameMemory(0x00);
-      epd.DisplayFrame();
-    } else {
-      epd.ClearFrameMemory(0xFF);
-      epd.DisplayFrame();
-      epd.ClearFrameMemory(0xFF);
-      epd.DisplayFrame();
-    }
-    paint.Clear(opposite_colorPrint);
-    displayDMY();
-    displayHM(hm);
-    displayTemp(t, m);
-    displayPres(p, m);
-    displayHum(h);
-#ifdef LIGHTSENS
-    displayLux(brightness);
-#endif
-    displayBatt(battery);
-    displayLink(nRFRSSI);
-    displayForecast(forecast);
-    display_Table();
+  paint.SetWidth(128);
+  paint.SetHeight(296);
 
-    epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
-    epd.DisplayFrame();
-    epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
-    epd.DisplayFrame();
-    epd.Sleep();
-  } else {
-    paint.SetWidth(24);
-    paint.SetHeight(41);
-    paint.Clear(opposite_colorPrint);
-    displayHM(hm);
-    epd.SetFrameMemory(paint.GetImage(), 0, 249, paint.GetWidth(), paint.GetHeight());
-    epd.DisplayFrame();
-    epd.SetFrameMemory(paint.GetImage(), 0, 249, paint.GetWidth(), paint.GetHeight());
-    epd.DisplayFrame();
-    epd.Sleep();
-  }
+  epd.ClearFrameMemory(0xFF);
+  epd.DisplayFrame();
+  epd.ClearFrameMemory(0xFF);
+  epd.DisplayFrame();
+
+  paint.Clear(opposite_colorPrint);
+  displayTemp(t, m);
+  displayPres(p, m);
+  displayHum(h);
+#ifdef LIGHTSENS
+  displayLux(brightness);
+#endif
+  displayBatt(battery);
+  displayLink(nRFRSSI);
+  displayForecast(forecast);
+  display_Table();
+
+  epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
+  epd.DisplayFrame();
+  epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
+  epd.DisplayFrame();
+  epd.Sleep();
 }
+
 
 
 void reseteinkset() {
@@ -3074,9 +2367,7 @@ void clearOne() {
 
 
 void einkZeropush() {
-  //epd.Init(lut_partial_update);
   epd.Reset();
-
   if (colorPrint == true) {
     epd.ClearFrameMemory(0xFF);
     epd.DisplayFrame();
@@ -3415,7 +2706,6 @@ void reportBattInk() {
   }
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
-
   wait(2000);
 }
 
@@ -3423,20 +2713,19 @@ void reportBattInk() {
 
 void blinkLed () {
   digitalWrite(LED_BUILTIN, HIGH);
-  delay(20);
+  delay(25);
   digitalWrite(LED_BUILTIN, LOW);
 }
 
 
 void preHwInit() {
-#if defined EBYTE || defined EBYTE2
+#ifdef BIZZER
   pinMode(SOUND_PIN, OUTPUT);
   digitalWrite(SOUND_PIN, LOW);
 #endif
   pinMode(PIN_BUTTON, INPUT);
   pinMode(29, INPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-  //blinkLed ();
 }
 
 
@@ -3485,7 +2774,11 @@ void before()
   happy_init();
 
   timeSend = loadState(102);
-  if (timeSend > 30) {
+  if (timeSend > 60) {
+    timeSend = 1;
+    saveState(102, timeSend);
+  }
+  if (timeSend <= 0) {
     timeSend = 1;
     saveState(102, timeSend);
   }
@@ -3493,7 +2786,11 @@ void before()
 
   battSend = loadState(103);
   if (battSend > 24) {
-    battSend = 3;
+    battSend = 4;
+    saveState(103, battSend);
+  }
+  if (battSend <= 0) {
+    battSend = 4;
     saveState(103, battSend);
   }
   //battSend = 1; // для теста, 1 час
@@ -3502,7 +2799,7 @@ void before()
     saveState(106, 0);
   }
   colorChange(loadState(106));
-  //colorChange(true); // для теста, true или false
+  //colorChange(false); // для теста, true или false
 
   setSound = loadState(107);
   if (setSound > 1) {
@@ -3515,157 +2812,172 @@ void before()
   blinkLed ();
   displayStart();
   blinkLed ();
-
-#ifdef WDTENABLE
   wdt_init();
-#endif
 }
 
 
 void presentation()
 {
-  check = sendSketchInfo(SN, SV);
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = sendSketchInfo(SN, SV);
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
+  if (needPresent == true) {
+    if (flag_nogateway_mode == false) {
+      if (mesInfo == false) {
+        check = sendSketchInfo(SN, SV);
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+          check = sendSketchInfo(SN, SV);
+          if (!check) {
+            _transportSM.failedUplinkTransmissions = 0;
+            wait(shortWait * 5);
+          }
+        }
+        if (check) {
+          mesInfo = true;
+        }
+      }
 
-  check = present(TEMP_CHILD_ID, S_TEMP, "Temperature");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(TEMP_CHILD_ID, S_TEMP, "Temperature");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
+      if (mesTemp == false) {
+        check = present(TEMP_CHILD_ID, S_TEMP, "Temperature");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesTemp = true;
+        }
+      }
 
-  check = present(HUM_CHILD_ID, S_HUM, "Humidity");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(HUM_CHILD_ID, S_HUM, "Humidity");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
+      if (mesHum == false) {
+        check = present(HUM_CHILD_ID, S_HUM, "Humidity");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesHum = true;
+        }
+      }
 
-  check = present(BARO_CHILD_ID, S_BARO, "Pressure");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(BARO_CHILD_ID, S_BARO, "Pressure");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
+      if (mesBaro == false) {
+        check = present(BARO_CHILD_ID, S_BARO, "Pressure");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesBaro = true;
+        }
+      }
 
-  check = present(FORECAST_CHILD_ID, S_CUSTOM, "Forecast");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(FORECAST_CHILD_ID, S_CUSTOM, "Forecast");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
+      if (mesForec == false) {
+        check = present(FORECAST_CHILD_ID, S_CUSTOM, "Forecast");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesForec = true;
+        }
+      }
 
 #ifdef LIGHTSENS
-  check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-#endif
-#ifdef BME680
-  check = present(IAQ_INDEX_CHILD_ID, S_AIR_QUALITY, "IAQ INDEX");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(IAQ_INDEX_CHILD_ID, S_AIR_QUALITY, "IAQ INDEX");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  check = present(AIR_QUALITY_CHILD_ID, S_CUSTOM, "AIR QUALITY");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(IAQ_INDEX_CHILD_ID, S_AIR_QUALITY, "IAQ INDEX");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-#endif
-  check = present(SIGNAL_Q_ID, S_CUSTOM, "SIGNAL %");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(SIGNAL_Q_ID, S_CUSTOM, "SIGNAL %");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  check = present(BATTERY_VOLTAGE_ID, S_CUSTOM, "BATTERY VOLTAGE");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(BATTERY_VOLTAGE_ID, S_CUSTOM, "BATTERY VOLTAGE");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  check = present(SET_TIME_SEND_ID, S_CUSTOM, "T&H SEND INTERVAL | Min");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(SET_TIME_SEND_ID, S_CUSTOM, "T&H SEND INTERVAL | Min");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  check = present(SET_BATT_SEND_ID, S_CUSTOM, "BATT SEND INTERTVAL | H");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(SET_BATT_SEND_ID, S_CUSTOM, "BATT SEND INTERTVAL | H");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  check = present(MY_SEND_RESET_REASON, S_CUSTOM, "RESTART REASON");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(MY_SEND_RESET_REASON, S_CUSTOM, "RESTART REASON");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  check = present(SET_COLOR_ID, S_CUSTOM, "COLOR W/B");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(SET_COLOR_ID, S_CUSTOM, "COLOR W/B");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-#if defined EBYTE || defined EBYTE2
-  check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
-  if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
-    wait(shortWait * 3);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
+      if (mesLux == false) {
+        check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesLux = true;
+        }
+      }
 #endif
 
-  wait(shortWait * 5);
-  sendConfig();
-  wait(shortWait);
+      if (mesSig == false) {
+        check = present(SIGNAL_Q_ID, S_CUSTOM, "SIGNAL %");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesSig = true;
+        }
+      }
+
+      if (mesBat == false) {
+        check = present(BATTERY_VOLTAGE_ID, S_CUSTOM, "BATTERY VOLTAGE");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesBat = true;
+        }
+      }
+
+      if (mesTimeset == false) {
+        check = present(SET_TIME_SEND_ID, S_CUSTOM, "T&H SEND INTERVAL | Min");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesTimeset = true;
+        }
+      }
+
+      if (mesBatset == false) {
+        check = present(SET_BATT_SEND_ID, S_CUSTOM, "BATT SEND INTERTVAL | H");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesBatset = true;
+        }
+      }
+
+      if (mesRes == false) {
+        check = present(MY_SEND_RESET_REASON, S_CUSTOM, "RESTART REASON");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesRes = true;
+        }
+      }
+
+      if (mesColorset == false) {
+        check = present(SET_COLOR_ID, S_CUSTOM, "COLOR W/B");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesColorset = true;
+        }
+      }
+
+#ifdef BIZZER
+      if (mesSoundset == false) {
+        check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
+        if (!check) {
+          wait(shortWait * 5);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesSoundset = true;
+        }
+      }
+#endif
+      if (mesColorset == true && mesRes == true && mesBatset == true && mesTimeset == true && mesBat == true && mesSig == true && mesForec == true && mesBaro == true && mesHum == true && mesTemp == true) {
+        needPresent = false;
+#ifdef BIZZER
+        if (mesSoundset == false) {
+          needPresent = true;
+        }
+#endif
+#ifdef LIGHTSENS
+        if (mesLux == false) {
+          needPresent = true;
+        }
+#endif
+      }
+      wait(shortWait * 5);
+      sendAfterResTask == true;
+      sendConfig();
+      wait(shortWait);
+    }
+  }
 }
 
 
@@ -3674,13 +2986,11 @@ void setup() {
   config_Happy_node();
 
   if (flag_nogateway_mode == false) {
-#if defined EBYTE || defined EBYTE2
+#ifdef BIZZER
     Sound();
     wait(100);
 #endif
 
-    requestTime();
-    wait(2000, C_REQ, I_TIME);
     sendResetReason();
   }
 
@@ -3689,9 +2999,10 @@ void setup() {
   transportDisable();
 
   interrupt_Init();
-#ifdef WDTENABLE
+
+  sendAfterResTask = true;
+
   sleepTimeCount = SLEEP_TIME;
-#endif
 
   bme_initAsleep();
   wait(100);
@@ -3794,15 +3105,14 @@ void loop() {
               buttIntStatus = 0;
               transportReInitialise();
               wait(shortWait);
+              resetPresent();
               presentation();
               wait(shortWait);
               transportDisable();
               wait(shortWait * 10);
               change = true;
               BATT_COUNT = BATT_TIME;
-#ifdef WDTENABLE
               sleepTimeCount = SLEEP_TIME;
-#endif
             }
             if ((millis() - previousMillis > 9500) && (millis() - previousMillis <= 12500) && (button_flag == true))
             {
@@ -3813,10 +3123,7 @@ void loop() {
             {
               wdt_nrfReset();
               change = true;
-              ckeck_hm = false;
-#ifdef WDTENABLE
               sleepTimeCount = SLEEP_TIME;
-#endif
               reseteinkset();
               button_flag = false;
               buttIntStatus = 0;
@@ -3825,7 +3132,6 @@ void loop() {
           wdt_nrfReset();
         } else {
           wdt_nrfReset();
-#ifdef WDTENABLE
           sleepTimeCount++;
           if (sleepTimeCount >= SLEEP_TIME) {
             sleepTimeCount = 0;
@@ -3836,24 +3142,11 @@ void loop() {
               sendData();
               transportDisable();
               wait(shortWait);
-              displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
+              displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric);
               wait(shortWait);
               change = false;
             }
           }
-#else
-          readData();
-          if (change == true) {
-            transportReInitialise();
-            wait(shortWait);
-            sendData();
-            transportDisable();
-            wait(shortWait);
-            displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
-            wait(shortWait);
-            change = false;
-          }
-#endif
           nosleep = false;
         }
       } else {
@@ -3864,9 +3157,7 @@ void loop() {
           transportDisable();
           wait(shortWait * 2);
           change = true;
-#ifdef WDTENABLE
           sleepTimeCount = SLEEP_TIME;
-#endif
         }
         wdt_nrfReset();
       }
@@ -3919,9 +3210,7 @@ void loop() {
             cpCount = 0;
             change = true;
             BATT_COUNT = BATT_TIME;
-#ifdef WDTENABLE
             sleepTimeCount = SLEEP_TIME;
-#endif
           }
           if ((millis() - previousMillis > 5500) && (millis() - previousMillis <= 8500) && (button_flag == true))
           {
@@ -3932,10 +3221,7 @@ void loop() {
           {
             wdt_nrfReset();
             change = true;
-            ckeck_hm = false;
-#ifdef WDTENABLE
             sleepTimeCount = SLEEP_TIME;
-#endif
             reseteinkset();
             button_flag = false;
             buttIntStatus = 0;
@@ -3943,7 +3229,6 @@ void loop() {
         }
         wdt_nrfReset();
       } else {
-#ifdef WDTENABLE
         sleepTimeCount++;
         if (sleepTimeCount >= SLEEP_TIME) {
           sleepTimeCount = 0;
@@ -3965,35 +3250,11 @@ void loop() {
               transportDisable();
             }
             wait(shortWait);
-            displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
+            displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric);
             wait(shortWait);
           }
           sleepTimeCount = 0;
         }
-#else
-        cpCount++;
-        if (cpCount >= cpNom) {
-          transportReInitialise();
-          check_parent();
-          cpCount = 0;
-        }
-        readData();
-        if (change == true) {
-          change = false;
-          if (flag_nogateway_mode == false) {
-            transportReInitialise();
-          }
-          wait(shortWait);
-          sendData();
-          if (flag_nogateway_mode == false) {
-            transportDisable();
-          }
-          wait(shortWait);
-          displayUpdate(temperatureSens, humiditySens, pressureSens, forecast, metric, ckeck_hm);
-          wait(shortWait);
-        }
-#endif
-        //if ((cpCount < cpNom) && (flag_nogateway_mode == true)) {
         if (cpCount < cpNom) {
           nosleep = false;
         }
@@ -4016,8 +3277,6 @@ void loop() {
     wdt_nrfReset();
     transportDisable();
 
-#ifdef WDTENABLE
-
     uint32_t periodTimer;
     uint32_t quotientTimer;
     stopTimer = millis();
@@ -4038,36 +3297,38 @@ void loop() {
     } else {
       PRECISION_TIME_WDT = SLEEP_TIME_WDT - periodTimer;
     }
-
-    hwSleep(SLEEP_TIME_WDT);
+    hwSleep(PRECISION_TIME_WDT);
     startTimer = millis();
-#else
-    uint32_t periodTimer;
-    uint32_t quotientTimer;
-    stopTimer = millis();
-    if (stopTimer < startTimer) {
-      periodTimer = (4294967295 - startTimer) + stopTimer;
-    } else {
-      periodTimer = stopTimer - startTimer;
-    }
-    if (periodTimer >= SLEEP_TIME) {
-      quotientTimer = periodTimer / SLEEP_TIME;
-      if (quotientTimer == 0) {
-        PRECISION_TIME = periodTimer - SLEEP_TIME;
-        sleepTimeCount++;
-      } else {
-        PRECISION_TIME = periodTimer - SLEEP_TIME * quotientTimer;
-        sleepTimeCount = sleepTimeCount + quotientTimer;
-      }
-    } else {
-      PRECISION_TIME = SLEEP_TIME - periodTimer;
-    }
-
-    hwSleep(SLEEP_TIME);
-    startTimer = millis();
-#endif
     nosleep = true;
   }
+}
+
+void resetPresent() {
+  needPresent = true;
+  mesInfo = false;
+  mesTemp = false;
+  mesHum = false;
+  mesBaro = false;
+  mesForec = false;
+  mesLux = false;
+  mesSig = false;
+  mesBat = false;
+  mesTimeset = false;
+  mesBatset = false;
+  mesRes = false;
+  mesColorset = false;
+
+#ifdef LIGHTSENS
+  mesLux = false;
+#endif
+#ifdef BIZZER
+  mesSoundset = false;
+  changeBiz = true;
+#endif
+  sendAfterResTask = true;
+  changeT = true;
+  changeB = true;
+  changeC = true;
 }
 
 
@@ -4075,74 +3336,38 @@ void bme_initAsleep() {
   if (! bme.begin()) {
     while (1);
   }
-#ifdef BME680
-  bme.setTemperatureOversampling(BME680_OS_1X);
-  bme.setHumidityOversampling(BME680_OS_1X);
-  bme.setPressureOversampling(BME680_OS_1X);
-  bme.setIIRFilterSize(BME680_FILTER_SIZE_1);
-  bme.setGasHeater(320, 250); // 320*C for 150 ms
-  GetGasReference();
-  //wait(250);
-#else
   bme.setSampling(Adafruit_BME280::MODE_FORCED,
                   Adafruit_BME280::SAMPLING_X1, // temperature
                   Adafruit_BME280::SAMPLING_X2, // pressure
                   Adafruit_BME280::SAMPLING_X1, // humidity
                   Adafruit_BME280::FILTER_X2   );
   wait(500);
-#endif
 }
 
 
 void readData() {
-#ifdef BME680
-  bme.performReading();
-#else
-  bme.takeForcedMeasurement();
-#endif
-  //wait(300);
-#ifdef BME680
-  temperatureSens = bme.readTemperature() - 1.6F;
-  pressureSens = bme.readPressure() / 100.0F;
-#else
-  temperatureSens = bme.readTemperature();
-  pressureSens = bme.readPressure() / 100.0F;
-#endif
-  forecast = sample(pressureSens);
-  //wait(shortWait);
-  chek_h = true;
-  if (chek_h == true) {
-#ifdef BME680
-    humiditySens = bme.readHumidity() + 5.0F;
-#else
-    humiditySens = bme.readHumidity();
-#endif
-    wait(shortWait);
-    if ((int)humiditySens < 0) {
-      humiditySens = 0.0;
-    }
-    if ((int)humiditySens > 99) {
-      humiditySens = 99.9;
-    }
-    chek_h = false;
-  } else {
-    chek_h = true;
+
+  if (sendAfterResTask == true) {
+    change = true;
   }
 
-#ifdef BME680
-  GetGasReference();
-  //wait(150);
-  humidity_score = GetHumidityScore();
-  gas_score      = GetGasScore();
-  air_quality_score = humidity_score + gas_score;
-  //if (getgasreference_count == true){
-  //GetGasReference();
-  // }
-  CalculateIAQ(air_quality_score);
-  //if ((getgasreference_count++) % 5 == 0) GetGasReference();
-  //GetGasReference();
-  //getgasreference_count =!getgasreference_count;
-#endif
+  bme.takeForcedMeasurement();
+
+
+  temperatureSens = bme.readTemperature();
+  pressureSens = bme.readPressure() / 100.0F;
+
+  forecast = sample(pressureSens);
+
+  humiditySens = bme.readHumidity();
+
+
+  if ((int)humiditySens < 0) {
+    humiditySens = 0.0;
+  }
+  if ((int)humiditySens > 99) {
+    humiditySens = 99.9;
+  }
 
   if ((int)temperatureSens < 0) {
     temperatureSens = 0.0;
@@ -4192,22 +3417,8 @@ void readData() {
     hch = true;
   }
 
-#ifdef BME680
-  if (abs(IAQ_score - old_air_quality_score) >= air_quality_Threshold) {
-    old_air_quality_score = IAQ_score;
-    change = true;
-    gch = true;
-    //CalculateIAQ(air_quality_score);
-    if (abs(IAQ_i - old_IAQ_i) >= IAQ_i_Threshold) {
-      old_IAQ_i = IAQ_i;
-      qch = true;
-    }
-  }
-#endif
-
 #ifdef LIGHTSENS
   brightness = light.get_lux() * 3.7;
-  wait(30);
 
   if (abs(brightness - old_brightness) >= brightThreshold) {
     old_brightness = brightness;
@@ -4221,14 +3432,6 @@ void readData() {
   if (BATT_COUNT >= BATT_TIME) {
     CORE_DEBUG(PSTR("BATT_COUNT == BATT_TIME: %d\n"), BATT_COUNT);
     change = true;
-  }
-
-  byte checkMinutePrint = minute();
-  if (minutePrint != checkMinutePrint) {
-    if (!change) {
-      change = true;
-      ckeck_hm = true;
-    }
   }
   wdt_nrfReset();
 }
@@ -4300,31 +3503,6 @@ void sendData() {
         fch = false;
         blinkEnable = true;
       }
-
-#ifdef BME680
-      if (gch == true) {
-        check = send(iaqIndex.set(IAQ_score, 1));
-        if (check == false) {
-          _transportSM.failedUplinkTransmissions = 0;
-          wait(50);
-          check = send(iaqIndex.set(IAQ_score, 1));
-          wait(50);
-        }
-        gch = false;
-        blinkEnable = true;
-      }
-      if (qch == true) {
-        check = send(airQuality.set(IAQ_i));
-        if (check == false) {
-          _transportSM.failedUplinkTransmissions = 0;
-          wait(50);
-          check = send(airQuality.set(IAQ_i));
-          wait(50);
-        }
-        qch = false;
-        blinkEnable = true;
-      }
-#endif
 #ifdef LIGHTSENS
       if (lch == true) {
         check = send(brightMsg.setDestination(0).set(brightness, 2));
@@ -4354,26 +3532,29 @@ void sendData() {
     if (bch == true) {
       if (BATT_TIME != 0) {
         batLevSend();
-        ckeck_hm = false;
       }
       bch = false;
       blinkEnable = true;
     }
     if (blinkEnable == true) {
       blinkLed();
-#if defined EBYTE || defined EBYTE2
-      //Sound();
+#ifdef BIZZER
+      Sound();
 #endif
     }
+
+    if (needPresent == true) {
+      presentation();
+    }
+
+    sendConfig();
+
   } else {
     if (BATT_COUNT >= BATT_TIME) {
       CORE_DEBUG(PSTR("BATT_COUNT == BATT_TIME: %d\n"), BATT_COUNT);
       wait(5);
       readBatt();
       BATT_COUNT = 0;
-      if (bch == true) {
-        ckeck_hm = false;
-      }
     }
     tch = false;
     hch = false;
@@ -4383,11 +3564,6 @@ void sendData() {
 #ifdef LIGHTSENS
     lch = false;
 #endif
-  }
-  wdt_nrfReset();
-  if (!timeReceived) {
-    requestTime();
-    wait(2000, C_REQ, I_TIME);
   }
   wdt_nrfReset();
 }
@@ -4461,8 +3637,6 @@ void batLevSend() {
     } else {
       CORE_DEBUG(PSTR("MyS: SEND BATTERY VOLTAGE\n"));
     }
-    requestTime();
-    wait(1500, C_REQ, I_TIME);
   }
 }
 
@@ -4525,92 +3699,94 @@ static __INLINE uint8_t battery_level_in_percent(const uint16_t mvolts)
 
 
 void timeConf() {
-#ifdef WDTENABLE
-  if (timeSend != 0) {
-    SLEEP_TIME = (timeSend * minuteT / SLEEP_TIME_WDT);
-  } else {
-    SLEEP_TIME = (minuteT / SLEEP_TIME_WDT);
-  }
-  if (battSend != 0) {
-    if (timeSend != 0) {
-      BATT_TIME = (battSend * 60 / timeSend);
-    } else {
-      BATT_TIME = (battSend * 60);
-    }
-  } else {
-    BATT_TIME = 0;
-  }
-  if (timeSend != 0) {
-    cpNom = (60 / timeSend);
-  } else {
-    cpNom = 60;
-  }
-  CORE_DEBUG(PSTR("SLEEP_TIME: %d\n"), SLEEP_TIME);
-#else
-  if (timeSend != 0) {
-    SLEEP_TIME = timeSend * minuteT;
-  } else {
-    if (battSend != 0) {
-      SLEEP_TIME = battSend * minuteT * 60;
-    } else {
-      SLEEP_TIME = minuteT * 60 * 24;
-    }
-  }
-  if (battSend != 0) {
-    if (timeSend != 0) {
-      BATT_TIME = battSend * 60 / timeSend;
-    } else {
-      BATT_TIME = 1;
-    }
-  } else {
-    BATT_TIME = 0;
-  }
 
-  cpNom = 60 / timeSend;
-  CORE_DEBUG(PSTR("MyS: BATT_TIME: %d\n"), BATT_TIME);
-#endif
+  SLEEP_TIME = (timeSend * minuteT / SLEEP_TIME_WDT);
+
+  BATT_TIME = (battSend * 60 / timeSend);
+
+  cpNom = (120 / timeSend);
+
+  CORE_DEBUG(PSTR("SLEEP_TIME: %d\n"), SLEEP_TIME);
 }
 
 
 void sendConfig() {
-  check = send(setTimeSendMsg.set(timeSend));
-  if (check == false) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = send(setTimeSendMsg.set(timeSend));
-    wait(shortWait * 2);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  check = send(setBattSendMsg.set(battSend));
-  if (check == false) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = send(setBattSendMsg.set(battSend));
-    wait(shortWait * 2);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-  bool inverse = loadState(106);
-  check = send(setColor.set(inverse));
-  if (check == false) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = send(setColor.set(inverse));
-    wait(shortWait * 2);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
-
-#if defined EBYTE || defined EBYTE2
-  check = send(setSoundMsg.set(setSound));
-  if (check == false) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = send(setSoundMsg.set(setSound));
-    wait(shortWait * 2);
-    _transportSM.failedUplinkTransmissions = 0;
-  }
+  wdt_nrfReset();
+#ifdef BIZZER
+  MyMessage setSoundMsg(SET_SOUND_ID, V_VAR1);
 #endif
+  MyMessage setTimeSendMsg(SET_TIME_SEND_ID, V_VAR1);
+  MyMessage setBattSendMsg(SET_BATT_SEND_ID, V_VAR1);
+  MyMessage setColor(SET_COLOR_ID, V_VAR1);
+
+  if (sendAfterResTask == true) {
+    if (changeT == true) {
+      check = send(setTimeSendMsg.set(timeSend));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait);
+        check = send(setTimeSendMsg.set(timeSend));
+        wait(shortWait * 2);
+        _transportSM.failedUplinkTransmissions = 0;
+      }
+      if (check == true) {
+        changeT = false;
+      }
+    }
+
+    if (changeB == true) {
+      check = send(setBattSendMsg.set(battSend));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait);
+        check = send(setBattSendMsg.set(battSend));
+        wait(shortWait * 2);
+        _transportSM.failedUplinkTransmissions = 0;
+      }
+      if (check == true) {
+        changeB = false;
+      }
+    }
+
+    if (changeC == true) {
+      bool inverse = loadState(106);
+      check = send(setColor.set(inverse));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait);
+        check = send(setColor.set(inverse));
+        wait(shortWait * 2);
+        _transportSM.failedUplinkTransmissions = 0;
+      }
+      if (check == true) {
+        changeC = false;
+      }
+    }
+
+#ifdef BIZZER
+    if (changeBiz == true) {
+      check = send(setSoundMsg.set(setSound));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait);
+        check = send(setSoundMsg.set(setSound));
+        wait(shortWait * 2);
+        _transportSM.failedUplinkTransmissions = 0;
+      }
+      if (check == true) {
+        changeC = false;
+      }
+    }
+#endif
+    if (changeT == false || changeB == false || changeC == false) {
+      sendAfterResTask = false;
+#ifdef BIZZER
+      if (changeBiz) {
+        sendAfterResTask = true;
+      }
+#endif
+    }
+  }
 }
 
 
@@ -4656,6 +3832,9 @@ void receive(const MyMessage & message)
         if (timeSend > 60) {
           timeSend = 60;
         }
+        if (timeSend <= 0) {
+          timeSend = 1;
+        }
         saveState(102, timeSend);
         wait(shortWait);
         send(setTimeSendMsg.set(timeSend));
@@ -4665,10 +3844,10 @@ void receive(const MyMessage & message)
         reportTimeInk();
         configMode = false;
         change = true;
+        sendAfterResTask = true;
+        changeT = true;
         timeConf();
-#ifdef WDTENABLE
         sleepTimeCount = SLEEP_TIME;
-#endif
       }
     }
 
@@ -4677,6 +3856,9 @@ void receive(const MyMessage & message)
         battSend = message.getByte();
         if (battSend > 24) {
           battSend = 24;
+        }
+        if (battSend <= 0) {
+          battSend = 1;
         }
         saveState(103, battSend);
         wait(shortWait);
@@ -4687,10 +3869,10 @@ void receive(const MyMessage & message)
         reportBattInk();
         configMode = false;
         change = true;
+        sendAfterResTask = true;
+        changeB = true;
         timeConf();
-#ifdef WDTENABLE
         sleepTimeCount = SLEEP_TIME;
-#endif
       }
     }
 
@@ -4705,13 +3887,13 @@ void receive(const MyMessage & message)
         wait(shortWait);
         configMode = false;
         change = true;
-#ifdef WDTENABLE
+        sendAfterResTask = true;
+        changeC = true;
         sleepTimeCount = SLEEP_TIME;
-#endif
       }
     }
 
-#if defined EBYTE || defined EBYTE2
+#ifdef BIZZER
     if (message.sensor == SET_SOUND_ID) {
       if (message.type == V_VAR1) {
         setSound = message.getBool();
@@ -4726,9 +3908,9 @@ void receive(const MyMessage & message)
         wait(shortWait);
         configMode = false;
         change = true;
-#ifdef WDTENABLE
+        sendAfterResTask = true;
+        changeBat = true;
         sleepTimeCount = SLEEP_TIME;
-#endif
       }
     }
 #endif
@@ -4756,7 +3938,7 @@ void gpiote_event_handler(uint32_t event_pins_low_to_high, uint32_t event_pins_h
   }
 }
 
-#if defined EBYTE || defined EBYTE2
+#ifdef BIZZER
 void Sound() {
   if (setSound == 1) {
     myTone(400, 10);
@@ -4779,19 +3961,15 @@ void myTone(uint32_t j, uint32_t k) {
 
 static __INLINE void wdt_init(void)
 {
-#ifdef WDTENABLE
   NRF_WDT->CONFIG = (WDT_CONFIG_HALT_Pause << WDT_CONFIG_HALT_Pos) | ( WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos);
   NRF_WDT->CRV = 35 * 32768;
   NRF_WDT->RREN |= WDT_RREN_RR0_Msk;
   NRF_WDT->TASKS_START = 1;
-#endif
 }
 
 
 static __INLINE void wdt_nrfReset() {
-#ifdef WDTENABLE
   NRF_WDT->RR[0] = WDT_RR_RR_Reload;
-#endif
 }
 
 
@@ -4800,64 +3978,6 @@ void new_device() {
   saveState(200, 255);
   hwReboot();
 }
-
-
-// ####################################################################################################
-// #                                                                                                  #
-// #            These functions are only included if the forecast function is enables.                #
-// #          The are used to generate a weater prediction by checking if the barometric              #
-// #                          pressure is rising or falling over time.                                #
-// #                                                                                                  #
-// ####################################################################################################
-#ifdef BME680
-void GetGasReference() {
-  // Now run the sensor for a burn-in period, then use combination of relative humidity and gas resistance to estimate indoor air quality as a percentage.
-  int readings = 5;
-  for (int i = 1; i <= readings; i++) { // read gas for 5 x 0.150mS = 1.250secs
-    gas_reference += bme.readGas();
-  }
-  gas_reference = gas_reference / (float)readings;
-}
-
-void CalculateIAQ(float score) {
-  //IAQ_i;
-  //IAQ_score;
-  score = (101.0 - score) * 7.5;
-  IAQ_score = score;
-  if      ((int)score >= 301)                  IAQ_i = 6;
-  else if ((int)score >= 201 && (int)score <= 300 ) IAQ_i = 5;
-  else if ((int)score >= 176 && (int)score <= 200 ) IAQ_i = 4;
-  else if ((int)score >= 151 && (int)score <= 175 ) IAQ_i = 3;
-  else if ((int)score >=  51 && (int)score <= 150 ) IAQ_i = 2;
-  else if ((int)score >=  00 && (int)score <=  50 ) IAQ_i = 1;
-}
-
-float GetHumidityScore() {  //Calculate humidity contribution to IAQ index
-  float current_humidity = bme.readHumidity();
-  if ((int)current_humidity >= 38 && (int)current_humidity <= 42) // Humidity +/-5% around optimum
-    humidity_score = 0.25 * 100.0;
-  else
-  { // Humidity is sub-optimal
-    if ((int)current_humidity < 38)
-      humidity_score = 0.25 / hum_reference * current_humidity * 100.0;
-    else
-    {
-      humidity_score = ((-0.25 / (100.0 - hum_reference) * current_humidity) + 0.416666) * 100.0;
-    }
-  }
-  return humidity_score;
-}
-
-float GetGasScore() {
-  //Calculate gas contribution to IAQ index
-  gas_score = (0.75 / (gas_upper_limit - gas_lower_limit) * gas_reference - (gas_lower_limit * (0.75 / (gas_upper_limit - gas_lower_limit)))) * 100.0;
-  if ((int)gas_score > 75) gas_score = 75.0; // Sometimes gas readings can go outside of expected scale maximum
-  if ((int)gas_score <  0) gas_score = 0.0;  // Sometimes gas readings can go outside of expected scale minimum
-  return gas_score;
-}
-#endif
-
-
 
 
 // ####################################################################################################
@@ -5005,9 +4125,10 @@ void happy_init() {
   CORE_DEBUG(PSTR("USER MEMORY SECTOR NODE ID: %d\n"), loadState(200));
 
   if (hwReadConfig(EEPROM_NODE_ID_ADDRESS) == 255) {
-    mtwr = 30000;
+    mtwr = 25000;
+    resetPresent();
   } else {
-    mtwr = 10000;
+    mtwr = 8000;
     no_present();
   }
   CORE_DEBUG(PSTR("MY_TRANSPORT_WAIT_MS: %d\n"), mtwr);
@@ -5015,7 +4136,7 @@ void happy_init() {
 
 
 void config_Happy_node() {
-  if (mtwr == 30000) {
+  if (mtwr == 25000) {
     myid = getNodeId();
     saveState(200, myid);
     if (isTransportReady() == true) {
@@ -5036,7 +4157,7 @@ void config_Happy_node() {
       gateway_fail();
     }
   }
-  if (mtwr != 30000) {
+  if (mtwr != 25000) {
     myid = getNodeId();
     if (myid != loadState(200)) {
       saveState(200, myid);
@@ -5086,7 +4207,6 @@ void check_parent() {
     flag_nogateway_mode = false;
     CORE_DEBUG(PSTR("MyS: Flag_nogateway_mode = FALSE\n"));
     flag_find_parent_process = true;
-    problem_mode_count = 0;
   } else {
     _transportSM.findingParentNode = false;
     CORE_DEBUG(PSTR("MyS: PARENT RESPONSE NOT FOUND\n"));
@@ -5155,9 +4275,7 @@ void update_Happy_transport() {
   present_only_parent();
   wait(shortWait);
   flag_update_transport_param = false;
-#ifdef WDTENABLE
   sleepTimeCount = SLEEP_TIME;
-#endif
   BATT_COUNT = BATT_TIME;
   change = true;
 }
