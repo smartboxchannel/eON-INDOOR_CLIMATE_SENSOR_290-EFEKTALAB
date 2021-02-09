@@ -16,12 +16,10 @@ More info at http://efektalab.com/eink290
 
 
 
-####Pay special attention:
+#### Pay special attention:
 
-####Unscrupulous buyers, scammers:
+#### Unscrupulous buyers, scammers:
 
 ##### Ion Gheorghe
-
 ##### Mississauga, ON
-
 ##### Canada
