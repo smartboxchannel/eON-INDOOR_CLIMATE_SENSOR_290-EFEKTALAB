@@ -41,6 +41,6 @@ More info at http://efektalab.com/eink290
 
 ### 3. Download the archive of this project to your computer
 
-### 4. Add support for devices of this project to the arduino-nRF5 library, the description is in the README.md file (https://github.com/smartboxchannel/EFEKTA-EINK290-TEMP-HUM-PRES-WEATHER-MINI-STATION-NRF52/blob /main/for_sandeepmistry_nRF5/README.md)
+### 4. Add support for devices of this project to the arduino-nRF5 library, the description is in the README.md file (https://github.com/smartboxchannel/EFEKTA-EINK290-TEMP-HUM-PRES-WEATHER-MINI-STATION-NRF52/blob/main/for_sandeepmistry_nRF5/README.md)
 
 ### 5. Add support for interrupts via gpiote, for this go to the ... packages \ sandeepmistry \ hardware \ nRF5 \ 0.7.0 \ cores \ nRF5 folder, and in the WInterrupts.c file, before the void GPIOTE_IRQHandler () function, add the line: \_\_attribute\_\_ ((weak ))
