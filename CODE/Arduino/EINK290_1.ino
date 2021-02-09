@@ -55,7 +55,6 @@ bool mesTemp;
 bool mesHum;
 bool mesBaro;
 bool mesForec;
-bool mesLux;
 bool mesSig;
 bool mesBat;
 bool mesTimeset;
@@ -3310,7 +3309,6 @@ void resetPresent() {
   mesHum = false;
   mesBaro = false;
   mesForec = false;
-  mesLux = false;
   mesSig = false;
   mesBat = false;
   mesTimeset = false;
@@ -3909,7 +3907,7 @@ void receive(const MyMessage & message)
         configMode = false;
         change = true;
         sendAfterResTask = true;
-        changeBat = true;
+        changeBiz = true;
         sleepTimeCount = SLEEP_TIME;
       }
     }

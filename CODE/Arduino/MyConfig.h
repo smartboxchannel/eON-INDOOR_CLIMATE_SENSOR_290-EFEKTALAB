@@ -19,8 +19,6 @@
 
 
 //#define EINK_V1
-//#define EBYTE // pro
-#define EBYTE2 // standart
 #define DCPOWER
 //#define LIGHTSENS
 //#define BIZZER
@@ -32,5 +30,5 @@
 //#define MY_NRF5_ESB_MODE (NRF5_250KBPS)
 #define MY_RESET_REASON_TEXT
 #define SN "EFEKTA WeatherStation 290"
-#define SV "0.39"
+#define SV "0.41"
 #define MY_RADIO_NRF5_ESB

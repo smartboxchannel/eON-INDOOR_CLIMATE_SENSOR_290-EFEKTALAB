@@ -24,23 +24,6 @@
 #include "MyConfig.h"
 #include <Arduino.h>
 
-#ifdef EBYTE
-#define RST_PIN         17
-#define DC_PIN          31
-#define CS_PIN          22
-#define BUSY_PIN        13
-#elif defined EBYTE2
-#define RST_PIN         13
-#define DC_PIN          29
-#define CS_PIN          31
-#define BUSY_PIN        24
-#else
-#define RST_PIN         17
-#define DC_PIN          12
-#define CS_PIN          11
-#define BUSY_PIN        18
-#endif
-
 
 class EpdIf {
   public:
