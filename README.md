@@ -44,3 +44,16 @@ More info at http://efektalab.com/eink290
 ### 4. Add support for devices of this project to the arduino-nRF5 library, the description is in the README.md file (https://github.com/smartboxchannel/EFEKTA-EINK290-TEMP-HUM-PRES-WEATHER-MINI-STATION-NRF52/blob/main/for_sandeepmistry_nRF5/README.md)
 
 ### 5. Add support for interrupts via gpiote, for this go to the ... packages \ sandeepmistry \ hardware \ nRF5 \ 0.7.0 \ cores \ nRF5 folder, and in the WInterrupts.c file, before the void GPIOTE_IRQHandler () function, add the line: \_\_attribute\_\_ ((weak ))
+
+### 6. Add the libraries in the archive () https://github.com/smartboxchannel/EFEKTA-EINK290-TEMP-HUM-PRES-WEATHER-MINI-STATION-NRF52/tree/main/CODE/Arduino/libraries  of this project to the libraries folder on your computer ( path: ...\Documents\Arduino\libraries )
+
+### 7. Create an EINK290_1 folder on your computer under the Arduino directory (Documents \ Arduino). Add the files of this project located in the Arduino section (https://github.com/smartboxchannel/EFEKTA-EINK290-TEMP-HUM-PRES-WEATHER-MINI-STATION-NRF52/tree/main/CODE/Arduino) to the created EINK290_1 folder
+
+### 8. Open the EINK290_1.ino file in the Arduino IDE program, go to the MyConfig.h tab and configure according to your board version and settings of your MySensors network.
+
+### 9. In the main menu of the Arduino IDE go to Tools-> Boards-> Nordic Semiconductors nRF5 Boards, in the list that opens, select the EFEKTA EINK290 nRF52832 board, EFEKTA EINK290 nRF52840, EFEKTA EINK290 nRF52840 PRO (depending on your device type). In the menu of the selected board, select the type of clock crystal (internal, external), also select the Reset: Enable item.
+
+### 10. Click on the icon - check and then download
+
+
+
