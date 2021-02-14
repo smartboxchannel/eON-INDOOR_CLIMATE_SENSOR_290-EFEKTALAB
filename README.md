@@ -22,7 +22,9 @@ More info at http://efektalab.com/eink290
 
 ### Instruction
 
+#### First of all, I recommend installing the Arduino IDE portable (optional, but desirable)
 
+https://www.arduino.cc/en/Guide/PortableIDE
 
 #### 1. Install the latest arduino-nRF5 library (https://github.com/sandeepmistry/arduino-nRF5)
 
