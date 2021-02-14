@@ -15,7 +15,7 @@ Efekta_eink290_nRF52832.upload.maximum_size=524288
 Efekta_eink290_nRF52832.bootloader.tool=sandeepmistry:openocd
 
 Efekta_eink290_nRF52832.build.mcu=cortex-m4
-Efekta_eink290_nRF52832.build.f_cpu=64000000
+Efekta_eink290_nRF52832.build.f_cpu=16000000
 Efekta_eink290_nRF52832.build.board=EINK290nRF52832
 Efekta_eink290_nRF52832.build.core=nRF5
 Efekta_eink290_nRF52832.build.variant=EINK290nRF52832
@@ -51,12 +51,12 @@ Efekta_eink290_nRF52840.upload.maximum_size=1048576
 Efekta_eink290_nRF52840.bootloader.tool=sandeepmistry:openocd
 
 Efekta_eink290_nRF52840.build.mcu=cortex-m4
-Efekta_eink290_nRF52840.build.f_cpu=64000000
+Efekta_eink290_nRF52840.build.f_cpu=16000000
 Efekta_eink290_nRF52840.build.board=EINK290nRF52840
 Efekta_eink290_nRF52840.build.core=nRF5
 Efekta_eink290_nRF52840.build.variant=EINK290nRF52840
 Efekta_eink290_nRF52840.build.variant_system_lib=
-Efekta_eink290_nRF52840.build.extra_flags=-DNRF52
+Efekta_eink290_nRF52840.build.extra_flags=-DNRF52840_XXAA
 Efekta_eink290_nRF52840.build.float_flags=-mfloat-abi=hard -mfpu=fpv4-sp-d16
 Efekta_eink290_nRF52840.build.ldscript=nrf52840_xxaa.ld
 
@@ -87,12 +87,12 @@ Efekta_eink290_nRF52840pro.upload.maximum_size=1048576
 Efekta_eink290_nRF52840pro.bootloader.tool=sandeepmistry:openocd
 
 Efekta_eink290_nRF52840pro.build.mcu=cortex-m4
-Efekta_eink290_nRF52840pro.build.f_cpu=64000000
+Efekta_eink290_nRF52840pro.build.f_cpu=16000000
 Efekta_eink290_nRF52840pro.build.board=EINK290nRF52840PRO
 Efekta_eink290_nRF52840pro.build.core=nRF5
 Efekta_eink290_nRF52840pro.build.variant=EINK290nRF52840PRO
 Efekta_eink290_nRF52840pro.build.variant_system_lib=
-Efekta_eink290_nRF52840pro.build.extra_flags=-DNRF52
+Efekta_eink290_nRF52840pro.build.extra_flags=-DNRF52840_XXAA
 Efekta_eink290_nRF52840pro.build.float_flags=-mfloat-abi=hard -mfpu=fpv4-sp-d16
 Efekta_eink290_nRF52840pro.build.ldscript=nrf52840_xxaa.ld
 
