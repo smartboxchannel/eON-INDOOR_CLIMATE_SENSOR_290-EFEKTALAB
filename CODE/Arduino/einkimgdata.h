@@ -1,6 +1,6 @@
 // ###################           Mini wither station with electronic ink display 2.9 Inch | nRF52            ############### //
 //                                                                                                                           //
-//        @filename   :   EFEKTA_THPEINK290_0.29.ino                                                                         //
+//        @filename   :   EFEKTA_THPEINK290_1.ino                                                                         //
 //        @brief en   :   Wireless, battery-operated temperature,humidity and pressure sensor(SHT20, SI7020, HTU21D, BME280) //
 //                        with electronic ink display(Good Display GDEH029A1). The extended version adds the MAX44009 light  //
 //                        sensor, an active bizzer Works on nRF52.                                                           //
@@ -21,6 +21,7 @@
 extern const unsigned char LOGO[];
 extern const unsigned char CONECT[];
 extern const unsigned char CONECTEN[];
+extern const unsigned char Especially[];
 extern const unsigned char CONF[];
 extern const unsigned char CONFA[];
 extern const unsigned char PRESENT[];
@@ -75,15 +76,11 @@ extern const unsigned char F0EN[];
 extern const unsigned char F1[];
 extern const unsigned char F1EN[];
 extern const unsigned char F2[];
-extern const unsigned char F2W[];
 extern const unsigned char F2EN[];
-extern const unsigned char F2WEN[];
 extern const unsigned char F3[];
 extern const unsigned char F3EN[];
 extern const unsigned char F4[];
-extern const unsigned char F4W[];
 extern const unsigned char F4EN[];
-extern const unsigned char F4WEN[];
 extern const unsigned char F5[];
 extern const unsigned char F5EN[];
 extern const unsigned char NT0[];

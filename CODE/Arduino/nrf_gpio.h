@@ -1,6 +1,6 @@
 // ###################           Mini wither station with electronic ink display 2.9 Inch | nRF52            ############### //
 //                                                                                                                           //
-//        @filename   :   EFEKTA_THPEINK290_0.29.ino                                                                         //
+//        @filename   :   EFEKTA_THPEINK290_1.ino                                                                         //
 //        @brief en   :   Wireless, battery-operated temperature,humidity and pressure sensor(SHT20, SI7020, HTU21D, BME280) //
 //                        with electronic ink display(Good Display GDEH029A1). The extended version adds the MAX44009 light  //
 //                        sensor, an active bizzer Works on nRF52.                                                           //

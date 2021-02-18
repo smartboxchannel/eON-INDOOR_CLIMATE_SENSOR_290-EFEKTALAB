@@ -1,6 +1,6 @@
 // ###################           Mini wither station with electronic ink display 2.9 Inch | nRF52            ############### //
 //                                                                                                                           //
-//        @filename   :   EFEKTA_THPEINK290_0.29.ino                                                                         //
+//        @filename   :   EFEKTA_THPEINK290_1.ino                                                                         //
 //        @brief en   :   Wireless, battery-operated temperature,humidity and pressure sensor(SHT20, SI7020, HTU21D, BME280) //
 //                        with electronic ink display(Good Display GDEH029A1 OR GDEM029T94). Adds the MAX44009 light sensor, //
 //                        an active bizzer Works on nRF52.                                                                   //
@@ -20,15 +20,15 @@
 
 //#define EINK_V1
 #define DCPOWER
-//#define LIGHTSENS
-//#define BIZZER
-//#define LANG_EN
+#define LIGHTSENS
+#define BIZZER
+#define LANG_EN
 //#define MY_DEBUG
 //#define MY_PASSIVE_NODE
 //#define MY_NODE_ID 101
+#define MY_RADIO_NRF5_ESB
 #define MY_NRF5_ESB_MODE (NRF5_1MBPS)
 //#define MY_NRF5_ESB_MODE (NRF5_250KBPS)
 #define MY_RESET_REASON_TEXT
 #define SN "EFEKTA WeatherStation 290"
-#define SV "0.41"
-#define MY_RADIO_NRF5_ESB
+#define SV "0.45"
