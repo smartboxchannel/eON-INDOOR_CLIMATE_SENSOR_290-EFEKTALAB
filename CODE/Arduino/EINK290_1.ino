@@ -2679,7 +2679,7 @@ void displayStart() {
 
 
   // ###################################           Especially for            ################################### //
-
+#ifdef ESPECIALLY
   epd.ClearFrameMemory(0xFF);   // bit set = white, bit reset = black
   epd.DisplayFrame();
   paint.Clear(opposite_colorPrint);
@@ -2687,6 +2687,7 @@ void displayStart() {
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
   delay(2000);
+#endif
   // ###################################           Especially for            ################################### //
 
 
