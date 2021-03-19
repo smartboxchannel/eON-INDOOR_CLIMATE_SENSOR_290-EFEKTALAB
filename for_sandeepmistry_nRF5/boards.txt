@@ -107,3 +107,37 @@ Efekta_eink290_nRF52840pro.menu.reset.notenable=Don't enable
 Efekta_eink290_nRF52840pro.menu.reset.notenable.build.reset_flags=
 Efekta_eink290_nRF52840pro.menu.reset.enabled=Enable
 Efekta_eink290_nRF52840pro.menu.reset.enabled.build.reset_flags=-DCONFIG_GPIO_AS_PINRESET
+
+
+# Efekta EINK290 nRF52833 PRO variants
+###################
+
+Efekta_eink290_nRF52833pro.name=EFEKTA EINK290 nRF52833 PRO
+
+Efekta_eink290_nRF52833pro.upload.tool=sandeepmistry:openocd
+Efekta_eink290_nRF52833pro.upload.target=nrf52
+Efekta_eink290_nRF52833pro.upload.maximum_size=524288
+
+Efekta_eink290_nRF52833pro.bootloader.tool=sandeepmistry:openocd
+
+Efekta_eink290_nRF52833pro.build.mcu=cortex-m4
+Efekta_eink290_nRF52833pro.build.f_cpu=16000000
+Efekta_eink290_nRF52833pro.build.board=EINK290nRF52833PRO
+Efekta_eink290_nRF52833pro.build.core=nRF5
+Efekta_eink290_nRF52833pro.build.variant=EINK290nRF52833PRO
+Efekta_eink290_nRF52833pro.build.variant_system_lib=
+Efekta_eink290_nRF52833pro.build.extra_flags=-DNRF52833_XXAA
+Efekta_eink290_nRF52833pro.build.float_flags=-mfloat-abi=hard -mfpu=fpv4-sp-d16
+Efekta_eink290_nRF52833pro.build.ldscript=nrf52833_xxaa.ld
+
+Efekta_eink290_nRF52833pro.menu.lfclk.lfxo=Crystal Oscillator
+Efekta_eink290_nRF52833pro.menu.lfclk.lfxo.build.lfclk_flags=-DUSE_LFXO
+Efekta_eink290_nRF52833pro.menu.lfclk.lfrc=RC Oscillator
+Efekta_eink290_nRF52833pro.menu.lfclk.lfrc.build.lfclk_flags=-DUSE_LFRC
+Efekta_eink290_nRF52833pro.menu.lfclk.lfsynt=Synthesized
+Efekta_eink290_nRF52833pro.menu.lfclk.lfsynt.build.lfclk_flags=-DUSE_LFSYNT
+
+Efekta_eink290_nRF52833pro.menu.reset.notenable=Don't enable
+Efekta_eink290_nRF52833pro.menu.reset.notenable.build.reset_flags=
+Efekta_eink290_nRF52833pro.menu.reset.enabled=Enable
+Efekta_eink290_nRF52833pro.menu.reset.enabled.build.reset_flags=-DCONFIG_GPIO_AS_PINRESET
