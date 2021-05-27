@@ -1,0 +1,9 @@
+This can be done by connecting j-link to the device and opening cmd. 
+
+you need to insert a line:
+
+nrfjprog -f nrf52 --program "C:\EINK290_1_52840_RC_ST.ino.hex" --chiperase -r 
+
+and press enter.
+
+do not forget to specify the correct path to the hex file
