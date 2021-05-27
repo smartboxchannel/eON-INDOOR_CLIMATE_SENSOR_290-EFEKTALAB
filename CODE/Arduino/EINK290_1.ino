@@ -117,8 +117,8 @@ int16_t mypar;
 int16_t old_mypar = -1;
 
 #ifdef LIGHTSENS
-float brightness;
-float old_brightness;
+float brightness = 0.0;
+float old_brightness = -10.0;
 float brightThreshold = 5.0;
 #endif
 
@@ -1081,7 +1081,6 @@ void displayTemp(float temp, bool metr) {
 
 #ifdef LIGHTSENS
 void displayLux(float brig_temp) {
-
 #ifdef LANG_EN
   //DrawImageWH(&paint, 43, 220, PRESEN, 10, 72, colorPrint);
 #else
@@ -1090,7 +1089,7 @@ void displayLux(float brig_temp) {
 
 
   long brig = round(brig_temp * 10.0);
-
+  //brig = 0;
   if (brig < 100) {
     byte one_l = brig / 10;
     byte two_l = brig % 10;
@@ -1574,7 +1573,7 @@ void displayLux(float brig_temp) {
         break;
     }
 
-    DrawImageWH(&paint, 82, 144, CDP, 16, 5, colorPrint);
+    DrawImageWH(&paint, 82, 148, CDP, 16, 5, colorPrint);
 
     switch (five_l) {
       case 0:
@@ -1789,7 +1788,7 @@ void displayLux(float brig_temp) {
         break;
     }
 
-    DrawImageWH(&paint, 82, 139, CDP, 16, 5, colorPrint);
+    DrawImageWH(&paint, 82, 143, CDP, 16, 5, colorPrint);
 
     switch (six_l) {
       case 0:
@@ -2987,7 +2986,7 @@ void displayStart() {
   DrawImageWH(&paint, 32, 51, Especially, 64, 192, colorPrint);
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
-  hwSleep(3000);
+  hwSleep(7000);
 #endif
   // ###################################           Especially for            ################################### //
 
@@ -4132,7 +4131,7 @@ void readData() {
   }
 
 #ifdef LIGHTSENS
-  brightness = light.get_lux() * 4.0;
+  brightness = light.get_lux() * 5.0;
 
   if (abs(brightness - old_brightness) >= brightThreshold) {
     old_brightness = brightness;
