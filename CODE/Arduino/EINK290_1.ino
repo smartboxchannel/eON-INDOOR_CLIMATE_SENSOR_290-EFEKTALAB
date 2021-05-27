@@ -34,10 +34,10 @@ MAX44009 light;
 #define MY_NRF5_ESB_PA_LEVEL (0x4UL)
 #endif
 
-const uint16_t shortWait = 40;
+const uint16_t shortWait = 30;
 uint16_t minuteT = 60000;
-float tempThreshold = 0.33;
-float humThreshold = 1.5;
+float tempThreshold = 0.5;
+float humThreshold = 2.0;
 float pressThreshold = 0.5;
 
 uint32_t stopTimer;
@@ -48,6 +48,8 @@ const uint32_t SLEEP_TIME_WDT = 10000;
 uint32_t PRECISION_TIME_WDT;
 uint32_t PRECISION_TIME;
 
+byte clearEpaper;
+bool error_bme;
 bool needPresent;
 bool mesInfo;
 bool mesTemp;
@@ -85,7 +87,7 @@ bool lch;
 bool fch;
 bool gch;
 bool qch;
-bool metric = false;
+bool metric;
 bool timeReceived;
 bool configMode;
 bool button_flag;
@@ -117,7 +119,7 @@ int16_t old_mypar = -1;
 #ifdef LIGHTSENS
 float brightness;
 float old_brightness;
-float brightThreshold = 1.5;
+float brightThreshold = 5.0;
 #endif
 
 uint16_t BATT_TIME;
@@ -272,6 +274,9 @@ void displayTemp(float temp, bool metr) {
       byte three_t = temperature_temp % 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 14, 174, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 14, 174, NT1, 66, 40, colorPrint);
           break;
@@ -376,6 +381,9 @@ void displayTemp(float temp, bool metr) {
       byte two_t = temperature_temp % 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 14, 154, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 14, 154, NT1, 66, 40, colorPrint);
           break;
@@ -450,6 +458,9 @@ void displayTemp(float temp, bool metr) {
       byte three_t = temperature_temp % 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 14, 174, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 14, 174, NT1, 66, 40, colorPrint);
           break;
@@ -555,6 +566,9 @@ void displayTemp(float temp, bool metr) {
       byte three_t = temperature_temp % 100 / 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 14, 168, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 14, 168, NT1, 66, 40, colorPrint);
           break;
@@ -670,6 +684,9 @@ void displayTemp(float temp, bool metr) {
       byte three_t = temperature_temp % 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 22, 174, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 22, 174, NT1, 66, 40, colorPrint);
           break;
@@ -774,6 +791,9 @@ void displayTemp(float temp, bool metr) {
       byte two_t = temperature_temp % 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 22, 154, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 22, 154, NT1, 66, 40, colorPrint);
           break;
@@ -848,6 +868,9 @@ void displayTemp(float temp, bool metr) {
       byte three_t = temperature_temp % 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 22, 174, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 22, 174, NT1, 66, 40, colorPrint);
           break;
@@ -953,6 +976,9 @@ void displayTemp(float temp, bool metr) {
       byte three_t = temperature_temp % 100 / 10;
 
       switch (one_t) {
+        case 0:
+          DrawImageWH(&paint, 22, 168, NT0, 66, 40, colorPrint);
+          break;
         case 1:
           DrawImageWH(&paint, 22, 168, NT1, 66, 40, colorPrint);
           break;
@@ -1592,7 +1618,7 @@ void displayLux(float brig_temp) {
     byte five_l = brig % 100 / 10;
     byte six_l = brig % 10;
 
-    #ifdef LANG_EN
+#ifdef LANG_EN
     DrawImageWH(&paint, 82, 101, LUX, 16, 27, colorPrint);
 #else
     DrawImageWH(&paint, 82, 101, LUX, 16, 27, colorPrint);
@@ -1809,21 +1835,289 @@ void displayPres(float pres, bool metr) {
 #else
   DrawImageWH(&paint, 43, 220, PRES, 10, 72, colorPrint);
 #endif
-
-  int pressure_temp = round(pres * 10.0);
+  int pressure_temp;
+  if ((int)pres < 1000) {
+    pressure_temp = round(pres * 10.0);
+  } else {
+    pressure_temp = round(pres);
+  }
 
   byte one_p = pressure_temp / 1000;
   byte two_p = pressure_temp % 1000 / 100;
   byte three_p = pressure_temp % 100 / 10;
   byte four_p = pressure_temp % 10;
-
   if (metr) {
 
 #ifdef LANG_EN
-    DrawImageWH(&paint, 86, 226, MHPRESEN, 10, 61, colorPrint);
+    DrawImageWH(&paint, 86, 226, PAPRESEN, 10, 61, colorPrint);
+
+    if (one_p == 1) {
+
+      switch (one_p) {
+        case 1:
+          DrawImageWH(&paint, 59, 272, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 272, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 272, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 272, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 272, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 272, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 272, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 272, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 272, NPH9, 23, 16, colorPrint);
+          break;
+      }
+
+      switch (two_p) {
+        case 0:
+          DrawImageWH(&paint, 59, 256, NPH0, 23, 16, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 59, 256, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 256, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 256, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 256, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 256, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 256, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 256, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 256, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 256, NPH9, 23, 16, colorPrint);
+          break;
+      }
+
+      switch (three_p) {
+        case 0:
+          DrawImageWH(&paint, 59, 240, NPH0, 23, 16, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 59, 240, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 240, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 240, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 240, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 240, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 240, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 240, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 240, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 240, NPH9, 23, 16, colorPrint);
+          break;
+      }
+
+      switch (four_p) {
+        case 0:
+          DrawImageWH(&paint, 59, 224, NPH0, 23, 16, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 59, 224, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 224, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 224, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 224, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 224, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 224, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 224, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 224, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 224, NPH9, 23, 16, colorPrint);
+          break;
+      }
+    } else {
+
+      switch (one_p) {
+        case 1:
+          DrawImageWH(&paint, 59, 275, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 275, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 275, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 275, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 275, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 275, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 275, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 275, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 275, NPH9, 23, 16, colorPrint);
+          break;
+      }
+
+      switch (two_p) {
+        case 0:
+          DrawImageWH(&paint, 59, 259, NPH0, 23, 16, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 59, 259, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 259, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 259, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 259, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 259, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 259, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 259, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 259, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 259, NPH9, 23, 16, colorPrint);
+          break;
+      }
+
+      switch (three_p) {
+        case 0:
+          DrawImageWH(&paint, 59, 243, NPH0, 23, 16, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 59, 243, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 243, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 243, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 243, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 243, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 243, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 243, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 243, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 243, NPH9, 23, 16, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 78, 238, NPHP, 5, 5, colorPrint);
+
+      switch (four_p) {
+        case 0:
+          DrawImageWH(&paint, 59, 222, NPH0, 23, 16, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 59, 222, NPH1, 23, 16, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 59, 222, NPH2, 23, 16, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 59, 222, NPH3, 23, 16, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 59, 222, NPH4, 23, 16, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 59, 222, NPH5, 23, 16, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 59, 222, NPH6, 23, 16, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 59, 222, NPH7, 23, 16, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 59, 222, NPH8, 23, 16, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 59, 222, NPH9, 23, 16, colorPrint);
+          break;
+      }
+    }
+
+
 #else
     DrawImageWH(&paint, 86, 226, MHPRES, 10, 61, colorPrint);
-#endif
 
     switch (one_p) {
       case 1:
@@ -1955,6 +2249,7 @@ void displayPres(float pres, bool metr) {
         DrawImageWH(&paint, 59, 222, NPH9, 23, 16, colorPrint);
         break;
     }
+#endif
   } else {
 
 #ifdef LANG_EN
@@ -2616,6 +2911,9 @@ void displayForecast(uint8_t f) {
     case 5:
       DrawImageWH(&paint, 98, 76, F5EN, 30, 144, colorPrint);
       break;
+    case 10:
+      DrawImageWH(&paint, 98, 76, F10EN, 30, 144, colorPrint);
+      break;
   }
 #else
   switch (f) {
@@ -2636,6 +2934,9 @@ void displayForecast(uint8_t f) {
       break;
     case 5:
       DrawImageWH(&paint, 98, 76, F5, 30, 144, colorPrint);
+      break;
+    case 10:
+      DrawImageWH(&paint, 98, 76, F10, 30, 144, colorPrint);
       break;
   }
 #endif
@@ -2675,7 +2976,7 @@ void displayStart() {
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   //epd.DisplayFrameFull();
   epd.DisplayFrame();
-  delay(2000);
+  hwSleep(3000);
 
 
   // ###################################           Especially for            ################################### //
@@ -2686,7 +2987,7 @@ void displayStart() {
   DrawImageWH(&paint, 32, 51, Especially, 64, 192, colorPrint);
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
-  delay(2000);
+  hwSleep(3000);
 #endif
   // ###################################           Especially for            ################################### //
 
@@ -2701,7 +3002,7 @@ void displayStart() {
 #endif
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
-  epd.Sleep();
+  //epd.Sleep();
 }
 
 
@@ -2711,10 +3012,15 @@ void displayUpdate(float t, float h, float p, bool m) {
   paint.SetWidth(128);
   paint.SetHeight(296);
 
-  epd.ClearFrameMemory(0xFF);
-  epd.DisplayFrame();
-  epd.ClearFrameMemory(0xFF);
-  epd.DisplayFrame();
+  clearEpaper++;
+  if (clearEpaper == 5) {
+    epd.ClearFrameMemory(0xFF);
+    epd.DisplayFrame();
+    clearEpaper = 0;
+  }
+
+  //epd.ClearFrameMemory(0xFF);
+  //epd.DisplayFrame();
 
   paint.Clear(opposite_colorPrint);
   displayTemp(t, m);
@@ -3103,9 +3409,11 @@ void reportBattInk() {
 
 
 void blinkLed () {
+#ifdef BUILTIN_LED
   digitalWrite(LED_BUILTIN, HIGH);
-  delay(30);
+  delay(12);
   digitalWrite(LED_BUILTIN, LOW);
+#endif
 }
 
 
@@ -3116,13 +3424,28 @@ void preHwInit() {
 #endif
   pinMode(PIN_BUTTON, INPUT);
   pinMode(29, INPUT);
+#ifdef BUILTIN_LED
   pinMode(LED_BUILTIN, OUTPUT);
+#endif
 }
 
 
 void before()
 {
-
+  /*
+    if (((NRF_UICR->PSELRESET[0] & UICR_PSELRESET_CONNECT_Msk) != (UICR_PSELRESET_CONNECT_Connected << UICR_PSELRESET_CONNECT_Pos)) ||
+        ((NRF_UICR->PSELRESET[1] & UICR_PSELRESET_CONNECT_Msk) != (UICR_PSELRESET_CONNECT_Connected << UICR_PSELRESET_CONNECT_Pos))) {
+      NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen << NVMC_CONFIG_WEN_Pos;
+      while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+      NRF_UICR->PSELRESET[0] = 18;
+      while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+      NRF_UICR->PSELRESET[1] = 18;
+      while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+      NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren << NVMC_CONFIG_WEN_Pos;
+      while (NRF_NVMC->READY == NVMC_READY_READY_Busy) {}
+      NVIC_SystemReset();
+    }
+  */
 #ifdef DCPOWER
   NRF_POWER->DCDCEN = 1;
 #endif
@@ -3193,13 +3516,13 @@ void presentation()
       if (mesInfo == false) {
         check = sendSketchInfo(SN, SV);
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
-          check = sendSketchInfo(SN, SV);
-          if (!check) {
-            _transportSM.failedUplinkTransmissions = 0;
-            wait(shortWait * 5);
-          }
+          //check = sendSketchInfo(SN, SV);
+          //if (!check) {
+          // _transportSM.failedUplinkTransmissions = 0;
+          //wait(shortWait * 5);
+          // }
         }
         if (check) {
           mesInfo = true;
@@ -3209,7 +3532,7 @@ void presentation()
       if (mesTemp == false) {
         check = present(TEMP_CHILD_ID, S_TEMP, "Temperature");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesTemp = true;
@@ -3219,7 +3542,7 @@ void presentation()
       if (mesHum == false) {
         check = present(HUM_CHILD_ID, S_HUM, "Humidity");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesHum = true;
@@ -3229,7 +3552,7 @@ void presentation()
       if (mesBaro == false) {
         check = present(BARO_CHILD_ID, S_BARO, "Pressure");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesBaro = true;
@@ -3239,7 +3562,7 @@ void presentation()
       if (mesForec == false) {
         check = present(FORECAST_CHILD_ID, S_CUSTOM, "Forecast");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesForec = true;
@@ -3250,7 +3573,7 @@ void presentation()
       if (mesLux == false) {
         check = present(LUX_SENS_CHILD_ID, S_LIGHT_LEVEL, "LUX");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesLux = true;
@@ -3261,7 +3584,7 @@ void presentation()
       if (mesSig == false) {
         check = present(SIGNAL_Q_ID, S_CUSTOM, "SIGNAL %");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesSig = true;
@@ -3271,7 +3594,7 @@ void presentation()
       if (mesBat == false) {
         check = present(BATTERY_VOLTAGE_ID, S_CUSTOM, "BATTERY VOLTAGE");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesBat = true;
@@ -3281,7 +3604,7 @@ void presentation()
       if (mesTimeset == false) {
         check = present(SET_TIME_SEND_ID, S_CUSTOM, "T&H SEND INTERVAL | Min");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesTimeset = true;
@@ -3291,7 +3614,7 @@ void presentation()
       if (mesBatset == false) {
         check = present(SET_BATT_SEND_ID, S_CUSTOM, "BATT SEND INTERTVAL | H");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesBatset = true;
@@ -3301,7 +3624,7 @@ void presentation()
       if (mesRes == false) {
         check = present(MY_SEND_RESET_REASON, S_CUSTOM, "RESTART REASON");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesRes = true;
@@ -3311,7 +3634,7 @@ void presentation()
       if (mesColorset == false) {
         check = present(SET_COLOR_ID, S_CUSTOM, "COLOR W/B");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesColorset = true;
@@ -3322,7 +3645,7 @@ void presentation()
       if (mesSoundset == false) {
         check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
         if (!check) {
-          wait(shortWait * 5);
+          wait(shortWait * 7);
           _transportSM.failedUplinkTransmissions = 0;
         } else {
           mesSoundset = true;
@@ -3353,6 +3676,11 @@ void presentation()
 
 
 void setup() {
+
+  epd.ClearFrameMemory(0xFF);
+  epd.DisplayFrame();
+  epd.Sleep();
+
   config_Happy_node();
 
   if (flag_nogateway_mode == false) {
@@ -3360,6 +3688,8 @@ void setup() {
   }
 
   metric = getControllerConfig().isMetric;
+
+  //metric = false;
 
   transportDisable();
 
@@ -3370,21 +3700,21 @@ void setup() {
   sleepTimeCount = SLEEP_TIME;
 
   bme_initAsleep();
-  wait(100);
+  //wait(100);
 
 #ifdef LIGHTSENS
   light.begin();
-  wait(100);
+  //wait(50);
 #endif
 
   readBatt();
 
-  blinkLed ();
+  blinkLed();
 
   if (flag_nogateway_mode == false) {
 #ifdef BIZZER
     Sound();
-    wait(30);
+    wait(20);
 #endif
   }
 }
@@ -3704,8 +4034,9 @@ void resetPresent() {
 
 
 void bme_initAsleep() {
+  delay(100);
   if (! bme.begin()) {
-    while (1);
+    error_bme = true;
   }
   bme.setSampling(Adafruit_BME280::MODE_FORCED,
                   Adafruit_BME280::SAMPLING_X1, // temperature
@@ -3721,16 +4052,19 @@ void readData() {
   if (sendAfterResTask == true) {
     change = true;
   }
+  if (error_bme == false) {
+    bme.takeForcedMeasurement();
+    temperatureSens = bme.readTemperature();
+    pressureSens = bme.readPressure() / 100.0F;
+    humiditySens = bme.readHumidity();
+    forecast = sample(pressureSens);
+  } else {
+    temperatureSens = -1.0;
+    pressureSens = -1.0;
+    humiditySens = -1.0;
+    forecast = 10;
+  }
 
-  bme.takeForcedMeasurement();
-
-
-  temperatureSens = bme.readTemperature();
-  pressureSens = bme.readPressure() / 100.0F;
-
-  forecast = sample(pressureSens);
-
-  humiditySens = bme.readHumidity();
 
 
   if ((int)humiditySens < 0) {
@@ -3747,31 +4081,40 @@ void readData() {
     temperatureSens = 99.9;
   }
   if ((int)pressureSens < 300) {
-    pressureSens = 300.0;
+    pressureSens = 0.0;
   }
   if ((int)pressureSens > 1100) {
     pressureSens = 1100.0;
   }
-  if (forecast != old_forecast) {
-    change = true;
-    fch = true;
-    if ((old_forecast != 5) && (forecast == 0)) {
-      forecast = old_forecast;
-      change = false;
-      fch = false;
-    }
-    if ((old_forecast != 5) && (forecast != 0)) {
-      old_forecast = forecast;
-    }
-    if (old_forecast == 5) {
-      old_forecast = forecast;
+
+  if (error_bme == false) {
+    if (forecast != old_forecast) {
+      change = true;
+      fch = true;
+      if ((old_forecast != 5) && (forecast == 0)) {
+        forecast = old_forecast;
+        change = false;
+        fch = false;
+      }
+      if ((old_forecast != 5) && (forecast != 0)) {
+        old_forecast = forecast;
+      }
+      if (old_forecast == 5) {
+        old_forecast = forecast;
+      }
     }
   }
-  if (!metric) {
-    temperatureSens = temperatureSens * 9.0F / 5.0F + 32.0F;
-  } else {
-    pressureSens = pressureSens * 0.75006375541921F;
+
+  if (error_bme == false) {
+    if (!metric) {
+      temperatureSens = temperatureSens * 9.0F / 5.0F + 32.0F;
+    } else {
+#ifndef LANG_EN
+      pressureSens = pressureSens * 0.75006375541921F;
+#endif
+    }
   }
+
   if (abs(temperatureSens - old_temperature) >= tempThreshold) {
     old_temperature = temperatureSens;
     change = true;
@@ -3811,101 +4154,84 @@ void readData() {
 void sendData() {
   bool blinkEnable = false;
   if (flag_nogateway_mode == false) {
-    if (timeSend != 0) {
-      if (tch == true) {
-        check = send(msgTemp.setDestination(0).set(temperatureSens, 2));
-        if (check == false) {
-          _transportSM.failedUplinkTransmissions = 0;
-          wait(shortWait * 4);
-          check = send(msgTemp.setDestination(0).set(temperatureSens, 2));
-          if (check == false) {
-            wait(shortWait * 8);
-            _transportSM.failedUplinkTransmissions = 0;
-            check = send(msgTemp.setDestination(0).set(temperatureSens, 2));
-            wait(shortWait * 2);
-          }
-        }
+
+    if (tch == true) {
+      check = send(msgTemp.setDestination(0).set(temperatureSens, 2));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait * 5);
+      } else {
         tch = false;
-        checkSend();
         blinkEnable = true;
       }
-      if (hch == true) {
-        check = send(msgHum.setDestination(0).set(humiditySens, 2));
-        if (check == false) {
-          _transportSM.failedUplinkTransmissions = 0;
-          wait(shortWait * 4);
-          check = send(msgHum.setDestination(0).set(humiditySens, 2));
-          if (check == false) {
-            wait(shortWait * 8);
-            _transportSM.failedUplinkTransmissions = 0;
-            check = send(msgHum.setDestination(0).set(humiditySens, 2));
-            wait(shortWait * 2);
-          }
-        }
+      checkSend();
+    }
+
+    if (hch == true) {
+      wait(shortWait);
+      check = send(msgHum.setDestination(0).set(humiditySens, 2));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait * 4);
+      } else {
         hch = false;
-        checkSend();
         blinkEnable = true;
       }
-      if (pch == true) {
-        check = send(msgPres.setDestination(0).set(pressureSens, 2));
-        if (check == false) {
-          _transportSM.failedUplinkTransmissions = 0;
-          wait(shortWait * 4);
-          check = send(msgPres.setDestination(0).set(pressureSens, 2));
-          if (check == false) {
-            wait(shortWait * 8);
-            _transportSM.failedUplinkTransmissions = 0;
-            check = send(msgPres.setDestination(0).set(pressureSens, 2));
-            wait(shortWait * 2);
-          }
-        }
+      checkSend();
+    }
+
+    if (pch == true) {
+      wait(shortWait);
+      check = send(msgPres.setDestination(0).set(pressureSens, 2));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait * 4);
+      } else {
         pch = false;
-        checkSend();
         blinkEnable = true;
       }
-      if (fch == true) {
-        check = send(forecastMsg.set(forecast));
-        if (check == false) {
-          _transportSM.failedUplinkTransmissions = 0;
-          wait(50);
-          check = send(forecastMsg.set(forecast));
-          wait(50);
-        }
+      checkSend();
+    }
+
+    if (fch == true) {
+      wait(shortWait);
+      check = send(forecastMsg.set(forecast));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait * 4);
+      } else {
         fch = false;
         blinkEnable = true;
       }
+      checkSend();
+    }
+
 #ifdef LIGHTSENS
-      if (lch == true) {
-        check = send(brightMsg.setDestination(0).set(brightness, 2));
-        if (check == false) {
-          _transportSM.failedUplinkTransmissions = 0;
-          wait(shortWait * 4);
-          check = send(brightMsg.setDestination(0).set(brightness, 2));
-          if (check == false) {
-            wait(shortWait * 8);
-            _transportSM.failedUplinkTransmissions = 0;
-            check = send(brightMsg.setDestination(0).set(brightness, 2));
-            wait(shortWait * 2);
-          }
-        }
+    if (lch == true) {
+      wait(shortWait);
+      check = send(brightMsg.setDestination(0).set(brightness, 2));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait * 4);
+      } else {
         lch = false;
-        checkSend();
         blinkEnable = true;
       }
-#endif
+      checkSend();
     }
+#endif
+
     if (BATT_COUNT >= BATT_TIME) {
       CORE_DEBUG(PSTR("BATT_COUNT == BATT_TIME: %d\n"), BATT_COUNT);
-      wait(5);
+      //wait(5);
       readBatt();
       BATT_COUNT = 0;
     }
     if (bch == true) {
-      if (BATT_TIME != 0) {
-        batLevSend();
+      batLevSend();
+      if (bch == false) {
+        blinkEnable = true;
       }
-      bch = false;
-      blinkEnable = true;
     }
     if (blinkEnable == true) {
       blinkLed();
@@ -3913,7 +4239,6 @@ void sendData() {
       //Sound();
 #endif
     }
-
     if (needPresent == true) {
       presentation();
     }
@@ -3923,7 +4248,7 @@ void sendData() {
   } else {
     if (BATT_COUNT >= BATT_TIME) {
       CORE_DEBUG(PSTR("BATT_COUNT == BATT_TIME: %d\n"), BATT_COUNT);
-      wait(5);
+      //wait(5);
       readBatt();
       BATT_COUNT = 0;
     }
@@ -3968,9 +4293,9 @@ void checkSend() {
 
 
 void readBatt() {
-  wait(50);
+  wait(26);
   batteryVoltage = hwCPUVoltage();
-  wait(10);
+  //wait(10);
   battery = battery_level_in_percent(batteryVoltage);
   batteryVoltageF = (float)batteryVoltage / 1000.00;
   CORE_DEBUG(PSTR("battery voltage: %d\n"), batteryVoltage);
@@ -3986,25 +4311,23 @@ void batLevSend() {
     if (battery > 100) {
       battery = 100;
     }
-    check = sendBatteryLevel(battery, 1);
-    wait(1500, C_INTERNAL, I_BATTERY_LEVEL);
-    if (!check) {
+    wait(shortWait * 10);
+    check = sendBatteryLevel(battery, true);
+    wait(1000, C_INTERNAL, I_BATTERY_LEVEL);
+    if (check == false) {
       _transportSM.failedUplinkTransmissions = 0;
-      //wait(50);
-      check = sendBatteryLevel(battery, 1);
-      wait(1500, C_INTERNAL, I_BATTERY_LEVEL);
+      wait(shortWait * 4);
+    } else {
+      bch = false;
+      lqSend();
     }
     checkSend();
     wdt_nrfReset();
-    lqSend();
 
     check = send(bvMsg.set(batteryVoltageF, 2));
     if (!check) {
       _transportSM.failedUplinkTransmissions = 0;
-      wait(100);
-      check = send(bvMsg.set(batteryVoltageF, 2));
-      _transportSM.failedUplinkTransmissions = 0;
-      //wait(100);
+      wait(shortWait * 4);
     } else {
       CORE_DEBUG(PSTR("MyS: SEND BATTERY VOLTAGE\n"));
     }
@@ -4024,9 +4347,6 @@ void lqSend() {
 
   check = send(sqMsg.set(nRFRSSI));
   if (!check) {
-    _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait * 2);
-    check = send(sqMsg.set(nRFRSSI));
     _transportSM.failedUplinkTransmissions = 0;
   } else {
     CORE_DEBUG(PSTR("MyS: SEND LINK QUALITY\n"));
@@ -4095,12 +4415,8 @@ void sendConfig() {
       check = send(setTimeSendMsg.set(timeSend));
       if (check == false) {
         _transportSM.failedUplinkTransmissions = 0;
-        wait(shortWait);
-        check = send(setTimeSendMsg.set(timeSend));
-        wait(shortWait * 2);
-        _transportSM.failedUplinkTransmissions = 0;
-      }
-      if (check == true) {
+        wait(shortWait * 5);
+      } else {
         changeT = false;
       }
     }
@@ -4109,12 +4425,8 @@ void sendConfig() {
       check = send(setBattSendMsg.set(battSend));
       if (check == false) {
         _transportSM.failedUplinkTransmissions = 0;
-        wait(shortWait);
-        check = send(setBattSendMsg.set(battSend));
-        wait(shortWait * 2);
-        _transportSM.failedUplinkTransmissions = 0;
-      }
-      if (check == true) {
+        wait(shortWait * 5);
+      } else {
         changeB = false;
       }
     }
@@ -4124,12 +4436,8 @@ void sendConfig() {
       check = send(setColor.set(inverse));
       if (check == false) {
         _transportSM.failedUplinkTransmissions = 0;
-        wait(shortWait);
-        check = send(setColor.set(inverse));
-        wait(shortWait * 2);
-        _transportSM.failedUplinkTransmissions = 0;
-      }
-      if (check == true) {
+        wait(shortWait * 5);
+      } else {
         changeC = false;
       }
     }
@@ -4139,12 +4447,8 @@ void sendConfig() {
       check = send(setSoundMsg.set(setSound));
       if (check == false) {
         _transportSM.failedUplinkTransmissions = 0;
-        wait(shortWait);
-        check = send(setSoundMsg.set(setSound));
-        wait(shortWait * 2);
-        _transportSM.failedUplinkTransmissions = 0;
-      }
-      if (check == true) {
+        wait(shortWait * 5);
+      } else {
         changeC = false;
       }
     }
@@ -4181,14 +4485,7 @@ void sendResetReason() {
   check = send(sendMsg.set(reason.c_str()));
   if (check == false) {
     _transportSM.failedUplinkTransmissions = 0;
-    wait(shortWait);
-    check = send(sendMsg.set(reason.c_str()));
-    if (check == false) {
-      wait(shortWait * 3);
-      _transportSM.failedUplinkTransmissions = 0;
-      check = send(sendMsg.set(reason.c_str()));
-      wait(shortWait);
-    }
+    wait(shortWait * 5);
   }
   if (check) NRF_POWER->RESETREAS = (0xFFFFFFFF);
 }

@@ -65,42 +65,42 @@ int Epd::InitV1(const unsigned char* lut) {
 
 
 int Epd::InitV2() {
-    /* this calls the peripheral hardware interface, see epdif */
-    if (IfInit() != 0) {
-        return -1;
-    }
-  
-  Reset();
-  
-    /* EPD hardware init start */
-  WaitUntilIdle();   
-  SendCommand(0x12);  //SWRESET
-  WaitUntilIdle();   
+  /* this calls the peripheral hardware interface, see epdif */
+  if (IfInit() != 0) {
+    return -1;
+  }
 
-  SendCommand(0x01); //Driver output control      
+  Reset();
+
+  /* EPD hardware init start */
+  WaitUntilIdle();
+  SendCommand(0x12);  //SWRESET
+  WaitUntilIdle();
+
+  SendCommand(0x01); //Driver output control
   SendData(0x27);
   SendData(0x01);
   SendData(0x00);
 
-  SendCommand(0x11); //data entry mode       
+  SendCommand(0x11); //data entry mode
   SendData(0x03);
 
-  SetMemoryArea(0, 0, width-1, height-1);
+  SetMemoryArea(0, 0, width - 1, height - 1);
 
   SendCommand(0x3C); //BorderWavefrom
-  SendData(0x05); 
+  SendData(0x05);
 
   SendCommand(0x21); //  Display update control
   SendData(0x00);
-  SendData(0x80); 
+  SendData(0x80);
 
   SendCommand(0x18); //Read built-in temperature sensor
-  SendData(0x80); 
+  SendData(0x80);
 
   SetMemoryPointer(0, 0);
   WaitUntilIdle();
-    /* EPD hardware init end */
-    return 0;
+  /* EPD hardware init end */
+  return 0;
 }
 
 
@@ -108,8 +108,6 @@ int Epd::InitV2() {
     @brief: basic function for sending commands
 */
 void Epd::SendCommand(unsigned char command) {
-  //DigitalWrite(dc_pin, LOW);
-  //SpiTransfer(command);
   DigitalWrite(dc_pin, LOW);
   DigitalWrite(cs_pin, LOW);
   SpiTransfer(command);
@@ -120,8 +118,6 @@ void Epd::SendCommand(unsigned char command) {
     @brief: basic function for sending data
 */
 void Epd::SendData(unsigned char data) {
-  //DigitalWrite(dc_pin, HIGH);
-  //SpiTransfer(data);
   DigitalWrite(dc_pin, HIGH);
   DigitalWrite(cs_pin, LOW);
   SpiTransfer(data);
@@ -132,19 +128,19 @@ void Epd::SendData(unsigned char data) {
     @brief: Wait until the busy_pin goes LOW
 */
 /*
-void Epd::WaitUntilIdle(void) {
+  void Epd::WaitUntilIdle(void) {
   while (DigitalRead(busy_pin) == HIGH) {     //LOW: idle, HIGH: busy
     DelayMs(20);
   }
-}
+  }
 */
 void Epd::WaitUntilIdle(void) {
-  while(1) {   //=1 BUSY
-    if(DigitalRead(busy_pin)==LOW) 
+  while (1) {  //=1 BUSY
+    if (DigitalRead(busy_pin) == LOW)
       break;
-    DelayMs(30);
+    DelayMs(5);
   }
-  DelayMs(60);
+  DelayMs(20);
 }
 
 /**
@@ -219,55 +215,96 @@ void Epd::SetFrameMemory(
   }
 }
 #else
+
+unsigned char WF_PARTIAL_2IN9[159] =
+{
+0x0,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x80,0x80,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x40,0x40,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x80,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0A,0x0,0x0,0x0,0x0,0x0,0x2,  
+0x1,0x0,0x0,0x0,0x0,0x0,0x0,
+0x1,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x0,0x0,0x0,0x0,0x0,0x0,0x0,
+0x22,0x22,0x22,0x22,0x22,0x22,0x0,0x0,0x0,
+0x22,0x17,0x41,0xB0,0x32,0x36,
+};
+
 void Epd::SetFrameMemory(
-  const unsigned char* image_buffer,
-  int x,
-  int y,
-  int image_width,
-  int image_height
+    const unsigned char* image_buffer,
+    int x,
+    int y,
+    int image_width,
+    int image_height
 ) {
-  int x_end;
-  int y_end;
+    int x_end;
+    int y_end;
 
-  if (
-    image_buffer == NULL ||
-    x < 0 || image_width < 0 ||
-    y < 0 || image_height < 0
-  ) {
-    return;
-  }
-  /* x point must be the multiple of 8 or the last 3 bits will be ignored */
-  x &= 0xF8;
-  image_width &= 0xF8;
-  if (x + image_width >= this->width) {
-    x_end = this->width - 1;
-  } else {
-    x_end = x + image_width - 1;
-  }
-  if (y + image_height >= this->height) {
-    y_end = this->height - 1;
-  } else {
-    y_end = y + image_height - 1;
-  }
-
-  DigitalWrite(reset_pin, LOW);
-  DelayMs(5);
-  DigitalWrite(reset_pin, HIGH);
-  DelayMs(10);
-
-  SendCommand(BORDER_WAVEFORM_CONTROL); //BorderWavefrom
-  SendData(0x80);
-
-  SetMemoryArea(x, y, x_end, y_end);
-  SetMemoryPointer(x, y);
-  SendCommand(WRITE_RAM);
-  /* send the image data */
-  for (int j = 0; j < y_end - y + 1; j++) {
-    for (int i = 0; i < (x_end - x + 1) / 8; i++) {
-      SendData(image_buffer[i + j * (image_width / 8)]);
+    if (
+        image_buffer == NULL ||
+        x < 0 || image_width < 0 ||
+        y < 0 || image_height < 0
+    ) {
+        return;
     }
-  }
+    /* x point must be the multiple of 8 or the last 3 bits will be ignored */
+    x &= 0xF8;
+    image_width &= 0xF8;
+    if (x + image_width >= this->width) {
+        x_end = this->width - 1;
+    } else {
+        x_end = x + image_width - 1;
+    }
+    if (y + image_height >= this->height) {
+        y_end = this->height - 1;
+    } else {
+        y_end = y + image_height - 1;
+    }
 
+    DigitalWrite(reset_pin, LOW);
+    DelayMs(5);
+    DigitalWrite(reset_pin, HIGH);
+    DelayMs(10);
+  
+  SetLut2();
+  SendCommand(0x37); 
+  SendData(0x00);  
+  SendData(0x00);  
+  SendData(0x00);  
+  SendData(0x00); 
+  SendData(0x00);   
+  SendData(0x40);  
+  SendData(0x00);  
+  SendData(0x00);   
+  SendData(0x00);  
+  SendData(0x00);
+
+  SendCommand(0x3C); //BorderWavefrom
+  SendData(0x80); 
+
+  SendCommand(0x22); 
+  SendData(0xC0);   
+  SendCommand(0x20); 
+  WaitUntilIdle();  
+  
+    SetMemoryArea(x, y, x_end, y_end);
+    SetMemoryPointer(x, y);
+    SendCommand(0x24);
+    /* send the image data */
+    for (int j = 0; j < y_end - y + 1; j++) {
+        for (int i = 0; i < (x_end - x + 1) / 8; i++) {
+            SendData(image_buffer[i + j * (image_width / 8)]);
+        }
+    }
 }
 
 void Epd::SetFrameMemoryFull(
@@ -343,6 +380,7 @@ void Epd::SetFrameMemory(const unsigned char* image_buffer) {
 }
 #else
 void Epd::SetFrameMemory(const unsigned char* image_buffer) {
+
   SetMemoryArea(0, 0, this->width - 1, this->height - 1);
   SetMemoryPointer(0, 0);
   SendCommand(WRITE_RAM);
@@ -351,6 +389,18 @@ void Epd::SetFrameMemory(const unsigned char* image_buffer) {
     SendData(pgm_read_byte(&image_buffer[i]));
   }
 }
+
+
+void Epd::SetLut2(void) {       
+  unsigned char count;
+  SendCommand(0x32);
+  for(count=0; count<153; count++) 
+    SendData(WF_PARTIAL_2IN9[count]); 
+  WaitUntilIdle();
+}
+
+
+
 void Epd::SetFrameMemory_Base(const unsigned char* image_buffer) {
   SetMemoryArea(0, 0, this->width - 1, this->height - 1);
   SetMemoryPointer(0, 0);

@@ -97,6 +97,7 @@ class Epd : EpdIf {
     unsigned int busy_pin;
     const unsigned char* lut;
 
+    void SetLut2(void);
     void SetLut(const unsigned char* lut);
     void SetMemoryArea(int x_start, int y_start, int x_end, int y_end);
     void SetMemoryPointer(int x, int y);

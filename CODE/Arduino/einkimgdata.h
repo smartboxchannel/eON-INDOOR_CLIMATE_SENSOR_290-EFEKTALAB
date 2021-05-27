@@ -83,6 +83,8 @@ extern const unsigned char F4[];
 extern const unsigned char F4EN[];
 extern const unsigned char F5[];
 extern const unsigned char F5EN[];
+extern const unsigned char F10[];
+extern const unsigned char F10EN[];
 extern const unsigned char NT0[];
 extern const unsigned char NT1[];
 extern const unsigned char NT2[];
