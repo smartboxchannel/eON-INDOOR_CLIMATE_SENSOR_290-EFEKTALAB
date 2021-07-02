@@ -12,7 +12,7 @@
 //        @author     :   Andrew Lamchenko aka Berk                                                                          //
 //                                                                                                                           //
 //        Copyright (C) EFEKTALAB 2020                                                                                       //
-//        Copyright (c) 2014-2015 Arduino LLC.  All right reserved.                                                          //
+//        Copyright (c) 2014-1215 Arduino LLC.  All right reserved.                                                          //
 //        Copyright (c) 2016 Arduino Srl.  All right reserved.                                                               //
 //        Copyright (c) 2017 Sensnology AB. All right reserved.                                                              //
 //        Copyright (C) Waveshare     August 10 2017                                                                         //
@@ -28,17 +28,11 @@
 MAX44009 light;
 #endif
 
-#if defined EBYTE || defined EBYTE2
-#define MY_NRF5_ESB_PA_LEVEL (0x8UL)
-#else
-#define MY_NRF5_ESB_PA_LEVEL (0x4UL)
-#endif
-
-const uint16_t shortWait = 30;
+const uint16_t shortWait = 10;
 uint16_t minuteT = 60000;
 float tempThreshold = 0.5;
-float humThreshold = 2.0;
-float pressThreshold = 0.5;
+float humThreshold = 2.5;
+float pressThreshold = 1.0;
 
 uint32_t stopTimer;
 uint32_t startTimer;
@@ -49,6 +43,7 @@ uint32_t PRECISION_TIME_WDT;
 uint32_t PRECISION_TIME;
 
 byte clearEpaper;
+bool design;
 bool error_bme;
 bool needPresent;
 bool mesInfo;
@@ -58,10 +53,10 @@ bool mesBaro;
 bool mesForec;
 bool mesSig;
 bool mesBat;
-bool mesTimeset;
 bool mesBatset;
 bool mesRes;
 bool mesColorset;
+bool mesDesignset;
 #ifdef LIGHTSENS
 bool mesLux;
 #endif
@@ -69,9 +64,10 @@ bool mesLux;
 bool mesSoundset;
 bool changeBiz = true;
 #endif
-bool changeT = true;
+//bool changeT = true;
 bool changeB = true;
 bool changeC = true;
+bool changeD = true;
 bool sendAfterResTask;
 
 bool setSound = true;
@@ -88,7 +84,6 @@ bool fch;
 bool gch;
 bool qch;
 bool metric;
-bool timeReceived;
 bool configMode;
 bool button_flag;
 bool nosleep;
@@ -102,12 +97,13 @@ bool updateink1;
 bool updateink2;
 bool updateink3;
 bool updateink4;
+bool updateink5;
 bool updateinkclear;
 uint8_t battery;
 uint8_t old_battery;
 uint8_t cpNom;
 uint8_t cpCount;
-uint8_t timeSend;
+uint8_t timeSend = 1;
 uint8_t battSend;
 uint8_t err_delivery_beat;
 uint16_t batteryVoltage;
@@ -163,10 +159,10 @@ int16_t mtwr;
 #endif
 #define SIGNAL_Q_ID 100
 #define BATTERY_VOLTAGE_ID 101
-#define SET_TIME_SEND_ID 102
 #define SET_BATT_SEND_ID 103
 #define MY_SEND_RESET_REASON 105
 #define SET_COLOR_ID 106
+#define SET_DESIGN_ID 109
 #ifdef BIZZER
 #define SET_SOUND_ID 107
 #endif
@@ -182,10 +178,10 @@ MyMessage setSoundMsg(SET_SOUND_ID, V_VAR1);
 #endif
 MyMessage sqMsg(SIGNAL_Q_ID, V_VAR1);
 MyMessage bvMsg(BATTERY_VOLTAGE_ID, V_VAR1);
-MyMessage setTimeSendMsg(SET_TIME_SEND_ID, V_VAR1);
 MyMessage setBattSendMsg(SET_BATT_SEND_ID, V_VAR1);
 MyMessage sendMsg(MY_SEND_RESET_REASON, V_VAR1);
 MyMessage setColor(SET_COLOR_ID, V_VAR1);
+MyMessage setDesign(SET_DESIGN_ID, V_VAR1);
 
 
 // ##############################################################################################################
@@ -212,10 +208,18 @@ float pressureAvg;                // Average value is used in forecast algorithm
 float pressureAvg2;               // Average after 2 hours is used as reference value for the next iteration.
 float dP_dt;                      // Pressure delta over time
 
+
+#ifdef BME280
 #include <Adafruit_Sensor.h>
 #include "Adafruit_BME280.h"
 Adafruit_BME280 bme;
 #define SEALEVELPRESSURE_HPA (1013.25)
+#else
+#include <Adafruit_BMP280.h>
+Adafruit_BMP280 bme;
+#include "Adafruit_HTU21DF.h"
+Adafruit_HTU21DF sensor = Adafruit_HTU21DF();
+#endif
 
 
 void colorChange(bool flag) {
@@ -255,1572 +259,3138 @@ void DrawImageWH(Paint * paint, int x, int y, const unsigned char* imgData, int 
 
 
 void displayTemp(float temp, bool metr) {
+ // temp = 5.6;
+  //metr = false;
+
+
+  if (design == false) {
 #ifdef LIGHTSENS
 #ifdef LANG_EN
-  DrawImageWH(&paint, 3, 112, TEMPEN, 10, 72, colorPrint);
+    DrawImageWH(&paint, 3, 112, TEMPEN, 10, 72, colorPrint);
 #else
-  DrawImageWH(&paint, 3, 112, TEMP, 10, 72, colorPrint);
+    DrawImageWH(&paint, 3, 112, TEMP, 10, 72, colorPrint);
 #endif
 
-  int temperature_temp = round(temp * 10.0);
+    int temperature_temp = round(temp * 10.0);
 
-  if (metr) {
-    if (temperature_temp >= 100) {
+    if (metr) {
+      if (temperature_temp >= 100) {
 
-      DrawImageWH(&paint, 24, 63, NTC, 16, 20, colorPrint);
+        DrawImageWH(&paint, 24, 63, NTC, 16, 20, colorPrint);
 
-      byte one_t = temperature_temp / 100;
-      byte two_t = temperature_temp % 100 / 10;
-      byte three_t = temperature_temp % 10;
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
 
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 174, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 174, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 174, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 174, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 174, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 174, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 174, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 174, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 174, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 174, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 174, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 174, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 174, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 174, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 174, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 174, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 174, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 174, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 174, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 174, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 134, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 134, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 134, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 134, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 134, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 134, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 134, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 134, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 134, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 134, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 134, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 134, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 134, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 134, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 134, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 134, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 134, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 134, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 134, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 134, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      DrawImageWH(&paint, 69, 123, NTP, 11, 11, colorPrint);
+        DrawImageWH(&paint, 69, 123, NTP, 11, 11, colorPrint);
 
-      switch (three_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 83, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 83, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 83, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 83, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 83, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 83, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 83, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 83, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 83, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 83, NT9, 66, 40, colorPrint);
-          break;
-      }
-    } else {
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 83, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 83, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 83, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 83, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 83, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 83, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 83, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 83, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 83, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 83, NT9, 66, 40, colorPrint);
+            break;
+        }
+      } else {
 
-      DrawImageWH(&paint, 22, 83, NTC, 16, 20, colorPrint);
+        DrawImageWH(&paint, 22, 83, NTC, 16, 20, colorPrint);
 
-      byte one_t = temperature_temp / 10;
-      byte two_t = temperature_temp % 10;
+        byte one_t = temperature_temp / 10;
+        byte two_t = temperature_temp % 10;
 
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 154, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 154, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 154, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 154, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 154, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 154, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 154, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 154, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 154, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 154, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 154, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 154, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 154, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 154, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 154, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 154, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 154, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 154, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 154, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 154, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      DrawImageWH(&paint, 69, 143, NTP, 11, 11, colorPrint);
+        DrawImageWH(&paint, 69, 143, NTP, 11, 11, colorPrint);
 
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 103, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 103, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 103, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 103, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 103, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 103, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 103, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 103, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 103, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 103, NT9, 66, 40, colorPrint);
-          break;
-      }
-    }
-  } else {
-    if (temperature_temp < 1000) {
-
-      DrawImageWH(&paint, 22, 63, NTF, 16, 20, colorPrint);
-
-      byte one_t = temperature_temp / 100;
-      byte two_t = temperature_temp % 100 / 10;
-      byte three_t = temperature_temp % 10;
-
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 174, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 174, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 174, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 174, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 174, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 174, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 174, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 174, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 174, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 174, NT9, 66, 40, colorPrint);
-          break;
-      }
-
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 134, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 134, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 134, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 134, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 134, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 134, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 134, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 134, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 134, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 134, NT9, 66, 40, colorPrint);
-          break;
-      }
-
-      DrawImageWH(&paint, 69, 123, NTP, 11, 11, colorPrint);
-
-      switch (three_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 83, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 83, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 83, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 83, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 83, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 83, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 83, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 83, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 83, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 83, NT9, 66, 40, colorPrint);
-          break;
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 103, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 103, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 103, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 103, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 103, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 103, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 103, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 103, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 103, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 103, NT9, 66, 40, colorPrint);
+            break;
+        }
       }
     } else {
+      if (temperature_temp < 1000) {
 
-      DrawImageWH(&paint, 22, 68, NTF, 16, 20, colorPrint);
+        DrawImageWH(&paint, 22, 63, NTF, 16, 20, colorPrint);
 
-      byte one_t = temperature_temp / 1000;
-      byte two_t = temperature_temp % 1000 / 100;
-      byte three_t = temperature_temp % 100 / 10;
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
 
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 168, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 168, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 168, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 168, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 168, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 168, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 168, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 168, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 168, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 168, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 174, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 174, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 174, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 174, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 174, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 174, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 174, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 174, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 174, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 174, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 128, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 128, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 128, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 128, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 128, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 128, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 128, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 128, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 128, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 128, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 134, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 134, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 134, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 134, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 134, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 134, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 134, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 134, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 134, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 134, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      switch (three_t) {
-        case 0:
-          DrawImageWH(&paint, 14, 88, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 14, 88, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 14, 88, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 14, 88, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 14, 88, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 14, 88, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 14, 88, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 14, 88, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 14, 88, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 14, 88, NT9, 66, 40, colorPrint);
-          break;
+        DrawImageWH(&paint, 69, 123, NTP, 11, 11, colorPrint);
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 83, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 83, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 83, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 83, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 83, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 83, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 83, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 83, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 83, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 83, NT9, 66, 40, colorPrint);
+            break;
+        }
+      } else {
+
+        DrawImageWH(&paint, 22, 68, NTF, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 1000;
+        byte two_t = temperature_temp % 1000 / 100;
+        byte three_t = temperature_temp % 100 / 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 168, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 168, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 168, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 168, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 168, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 168, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 168, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 168, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 168, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 168, NT9, 66, 40, colorPrint);
+            break;
+        }
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 128, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 128, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 128, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 128, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 128, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 128, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 128, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 128, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 128, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 128, NT9, 66, 40, colorPrint);
+            break;
+        }
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 14, 88, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 14, 88, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 14, 88, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 14, 88, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 14, 88, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 14, 88, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 14, 88, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 14, 88, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 14, 88, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 14, 88, NT9, 66, 40, colorPrint);
+            break;
+        }
       }
     }
-  }
 #else
 #ifdef LANG_EN
-  DrawImageWH(&paint, 6, 112, TEMPEN, 10, 72, colorPrint);
+    DrawImageWH(&paint, 6, 112, TEMPEN, 10, 72, colorPrint);
 #else
-  DrawImageWH(&paint, 6, 112, TEMP, 10, 72, colorPrint);
+    DrawImageWH(&paint, 6, 112, TEMP, 10, 72, colorPrint);
 #endif
 
-  int temperature_temp = round(temp * 10.0);
+    int temperature_temp = round(temp * 10.0);
 
-  if (metr) {
-    if (temperature_temp >= 100) {
+    if (metr) {
+      if (temperature_temp >= 100) {
 
-      DrawImageWH(&paint, 24, 63, NTC, 16, 20, colorPrint);
+        DrawImageWH(&paint, 24, 63, NTC, 16, 20, colorPrint);
 
-      byte one_t = temperature_temp / 100;
-      byte two_t = temperature_temp % 100 / 10;
-      byte three_t = temperature_temp % 10;
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
 
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 174, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 174, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 174, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 174, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 174, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 174, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 174, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 174, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 174, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 174, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 174, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 174, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 174, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 174, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 174, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 174, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 174, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 174, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 174, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 174, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 134, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 134, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 134, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 134, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 134, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 134, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 134, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 134, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 134, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 134, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 134, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 134, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 134, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 134, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 134, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 134, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 134, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 134, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 134, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 134, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      DrawImageWH(&paint, 77, 123, NTP, 11, 11, colorPrint);
+        DrawImageWH(&paint, 77, 123, NTP, 11, 11, colorPrint);
 
-      switch (three_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 83, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 83, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 83, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 83, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 83, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 83, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 83, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 83, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 83, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 83, NT9, 66, 40, colorPrint);
-          break;
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 83, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 83, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 83, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 83, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 83, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 83, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 83, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 83, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 83, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 83, NT9, 66, 40, colorPrint);
+            break;
+        }
+      } else {
+
+        DrawImageWH(&paint, 24, 83, NTC, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 10;
+        byte two_t = temperature_temp % 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 154, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 154, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 154, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 154, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 154, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 154, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 154, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 154, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 154, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 154, NT9, 66, 40, colorPrint);
+            break;
+        }
+
+        DrawImageWH(&paint, 77, 143, NTP, 11, 11, colorPrint);
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 103, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 103, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 103, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 103, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 103, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 103, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 103, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 103, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 103, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 103, NT9, 66, 40, colorPrint);
+            break;
+        }
       }
     } else {
+      if (temperature_temp < 1000) {
 
-      DrawImageWH(&paint, 24, 83, NTC, 16, 20, colorPrint);
+        DrawImageWH(&paint, 24, 63, NTF, 16, 20, colorPrint);
 
-      byte one_t = temperature_temp / 10;
-      byte two_t = temperature_temp % 10;
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
 
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 154, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 154, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 154, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 154, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 154, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 154, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 154, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 154, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 154, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 154, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 174, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 174, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 174, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 174, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 174, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 174, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 174, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 174, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 174, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 174, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      DrawImageWH(&paint, 77, 143, NTP, 11, 11, colorPrint);
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 134, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 134, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 134, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 134, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 134, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 134, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 134, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 134, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 134, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 134, NT9, 66, 40, colorPrint);
+            break;
+        }
 
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 103, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 103, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 103, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 103, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 103, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 103, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 103, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 103, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 103, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 103, NT9, 66, 40, colorPrint);
-          break;
+        DrawImageWH(&paint, 77, 123, NTP, 11, 11, colorPrint);
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 83, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 83, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 83, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 83, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 83, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 83, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 83, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 83, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 83, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 83, NT9, 66, 40, colorPrint);
+            break;
+        }
+      } else {
+
+        DrawImageWH(&paint, 24, 68, NTF, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 1000;
+        byte two_t = temperature_temp % 1000 / 100;
+        byte three_t = temperature_temp % 100 / 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 168, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 168, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 168, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 168, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 168, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 168, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 168, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 168, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 168, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 168, NT9, 66, 40, colorPrint);
+            break;
+        }
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 128, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 128, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 128, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 128, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 128, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 128, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 128, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 128, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 128, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 128, NT9, 66, 40, colorPrint);
+            break;
+        }
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 88, NT0, 66, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 88, NT1, 66, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 88, NT2, 66, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 88, NT3, 66, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 88, NT4, 66, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 88, NT5, 66, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 88, NT6, 66, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 88, NT7, 66, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 88, NT8, 66, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 88, NT9, 66, 40, colorPrint);
+            break;
+        }
       }
     }
+#endif
   } else {
-    if (temperature_temp < 1000) {
 
-      DrawImageWH(&paint, 24, 63, NTF, 16, 20, colorPrint);
+#ifdef LIGHTSENS
 
-      byte one_t = temperature_temp / 100;
-      byte two_t = temperature_temp % 100 / 10;
-      byte three_t = temperature_temp % 10;
+    int temperature_temp = round(temp * 10.0);
 
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 174, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 174, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 174, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 174, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 174, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 174, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 174, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 174, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 174, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 174, NT9, 66, 40, colorPrint);
-          break;
-      }
+    if (metr) {
+      if (temperature_temp >= 100) {
 
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 134, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 134, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 134, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 134, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 134, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 134, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 134, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 134, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 134, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 134, NT9, 66, 40, colorPrint);
-          break;
-      }
+        DrawImageWH(&paint, 24 + 10, 63 - 1, NNC, 16, 20, colorPrint);
 
-      DrawImageWH(&paint, 77, 123, NTP, 11, 11, colorPrint);
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
 
-      switch (three_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 83, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 83, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 83, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 83, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 83, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 83, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 83, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 83, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 83, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 83, NT9, 66, 40, colorPrint);
-          break;
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 134, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 134, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 134, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 134, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 134, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 134, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 134, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 134, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 134, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 134, NN9, 61, 40, colorPrint);
+            break;
+        }
+        DrawImageWH(&paint, 22 + 10, 123, NNP, 61, 12, colorPrint);
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 83, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 83, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 83, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 83, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 83, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 83, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 83, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 83, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 83, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 83, NN9, 61, 40, colorPrint);
+            break;
+        }
+      } else {
+
+        DrawImageWH(&paint, 24 + 10, 83 - 1, NNC, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 10;
+        byte two_t = temperature_temp % 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 154, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 154, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 154, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 154, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 154, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 154, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 154, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 154, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 154, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 154, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        DrawImageWH(&paint, 22 + 10, 143, NNP, 61, 12, colorPrint);
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 103, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 103, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 103, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 103, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 103, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 103, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 103, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 103, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 103, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 103, NN9, 61, 40, colorPrint);
+            break;
+        }
       }
     } else {
+      if (temperature_temp < 1000) {
 
-      DrawImageWH(&paint, 24, 68, NTF, 16, 20, colorPrint);
+        DrawImageWH(&paint, 24 + 10, 63 - 1, NNF, 16, 20, colorPrint);
 
-      byte one_t = temperature_temp / 1000;
-      byte two_t = temperature_temp % 1000 / 100;
-      byte three_t = temperature_temp % 100 / 10;
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
 
-      switch (one_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 168, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 168, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 168, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 168, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 168, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 168, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 168, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 168, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 168, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 168, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 174 + 1, NN9, 61, 40, colorPrint);
+            break;
+        }
 
-      switch (two_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 128, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 128, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 128, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 128, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 128, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 128, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 128, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 128, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 128, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 128, NT9, 66, 40, colorPrint);
-          break;
-      }
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 134, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 134, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 134, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 134, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 134, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 134, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 134, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 134, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 134, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 134, NN9, 61, 40, colorPrint);
+            break;
+        }
 
-      switch (three_t) {
-        case 0:
-          DrawImageWH(&paint, 22, 88, NT0, 66, 40, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 22, 88, NT1, 66, 40, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 22, 88, NT2, 66, 40, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 22, 88, NT3, 66, 40, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 22, 88, NT4, 66, 40, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 22, 88, NT5, 66, 40, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 22, 88, NT6, 66, 40, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 22, 88, NT7, 66, 40, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 22, 88, NT8, 66, 40, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 22, 88, NT9, 66, 40, colorPrint);
-          break;
+        DrawImageWH(&paint, 22 + 10, 123, NNP, 61, 12, colorPrint);
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 83, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 83, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 83, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 83, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 83, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 83, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 83, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 83, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 83, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 83, NN9, 61, 40, colorPrint);
+            break;
+        }
+      } else {
+
+        DrawImageWH(&paint, 24 + 10, 68 - 2, NNF, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 1000;
+        byte two_t = temperature_temp % 1000 / 100;
+        byte three_t = temperature_temp % 100 / 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 168 + 1, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 128, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 128, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 128, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 128, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 128, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 128, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 128, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 128, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 128, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 128, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22 + 10, 88 - 1, NN9, 61, 40, colorPrint);
+            break;
+        }
       }
     }
-  }
+#else
+
+
+
+#ifdef LANG_EN
+    DrawImageWH(&paint, 6, 112, TEMPEN, 10, 72, colorPrint);
+#else
+    DrawImageWH(&paint, 6, 112, TEMP, 10, 72, colorPrint);
 #endif
+
+    int temperature_temp = round(temp * 10.0);
+
+    if (metr) {
+      if (temperature_temp >= 100) {
+
+        DrawImageWH(&paint, 24, 63 - 1, NNC, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 174 + 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 174 + 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 174 + 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 174 + 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 174 + 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 174 + 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 174 + 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 174 + 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 174 + 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 174 + 1, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 134, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 134, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 134, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 134, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 134, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 134, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 134, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 134, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 134, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 134, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        DrawImageWH(&paint, 22, 123, NNP, 61, 12, colorPrint);
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 83, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 83, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 83, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 83, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 83, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 83, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 83, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 83, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 83, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 83, NN9, 61, 40, colorPrint);
+            break;
+        }
+      } else {
+
+        DrawImageWH(&paint, 24, 83 - 1, NNC, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 10;
+        byte two_t = temperature_temp % 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 154, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 154, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 154, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 154, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 154, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 154, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 154, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 154, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 154, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 154, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        DrawImageWH(&paint, 22, 143, NNP, 61, 12, colorPrint);
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 103, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 103, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 103, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 103, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 103, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 103, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 103, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 103, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 103, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 103, NN9, 61, 40, colorPrint);
+            break;
+        }
+      }
+    } else {
+      if (temperature_temp < 1000) {
+
+        DrawImageWH(&paint, 24, 63 - 1, NNF, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 100;
+        byte two_t = temperature_temp % 100 / 10;
+        byte three_t = temperature_temp % 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 174 + 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 174 + 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 174 + 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 174 + 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 174 + 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 174 + 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 174 + 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 174 + 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 174 + 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 174 + 1, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 134, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 134, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 134, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 134, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 134, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 134, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 134, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 134, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 134, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 134, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        DrawImageWH(&paint, 22, 123, NNP, 61, 12, colorPrint);
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 83, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 83, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 83, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 83, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 83, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 83, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 83, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 83, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 83, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 83, NN9, 61, 40, colorPrint);
+            break;
+        }
+      } else {
+
+        DrawImageWH(&paint, 24, 68 - 2, NNF, 16, 20, colorPrint);
+
+        byte one_t = temperature_temp / 1000;
+        byte two_t = temperature_temp % 1000 / 100;
+        byte three_t = temperature_temp % 100 / 10;
+
+        switch (one_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 168 + 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 168 + 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 168 + 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 168 + 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 168 + 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 168 + 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 168 + 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 168 + 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 168 + 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 168 + 1, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        switch (two_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 128, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 128, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 128, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 128, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 128, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 128, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 128, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 128, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 128, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 128, NN9, 61, 40, colorPrint);
+            break;
+        }
+
+        switch (three_t) {
+          case 0:
+            DrawImageWH(&paint, 22, 88 - 1, NN0, 61, 40, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 22, 88 - 1, NN1, 61, 40, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 22, 88 - 1, NN2, 61, 40, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 22, 88 - 1, NN3, 61, 40, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 22, 88 - 1, NN4, 61, 40, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 22, 88 - 1, NN5, 61, 40, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 22, 88 - 1, NN6, 61, 40, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 22, 88 - 1, NN7, 61, 40, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 22, 88 - 1, NN8, 61, 40, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 22, 88 - 1, NN9, 61, 40, colorPrint);
+            break;
+        }
+      }
+    }
+#endif
+  }
 }
 
 
 #ifdef LIGHTSENS
 void displayLux(float brig_temp) {
-#ifdef LANG_EN
-  //DrawImageWH(&paint, 43, 220, PRESEN, 10, 72, colorPrint);
-#else
-  //DrawImageWH(&paint, 43, 220, PRES, 10, 72, colorPrint);
-#endif
-
 
   long brig = round(brig_temp * 10.0);
-  //brig = 0;
-  if (brig < 100) {
-    byte one_l = brig / 10;
-    byte two_l = brig % 10;
+  brig = 23456;
+
+
+  if (design == false) {
+    if (brig < 100) {
+      byte one_l = brig / 10;
+      byte two_l = brig % 10;
 
 #ifdef LANG_EN
-    DrawImageWH(&paint, 82, 120, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 120, LUX, 16, 27, colorPrint);
 #else
-    DrawImageWH(&paint, 82, 120, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 120, LUX, 16, 27, colorPrint);
 #endif
 
-    switch (one_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 167, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 167, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 167, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 167, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 167, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 167, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 167, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 167, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 167, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 167, CD9, 16, 9, colorPrint);
-        break;
-    }
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 167, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 167, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 167, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 167, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 167, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 167, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 167, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 167, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 167, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 167, CD9, 16, 9, colorPrint);
+          break;
+      }
 
-    DrawImageWH(&paint, 82, 162, CDP, 16, 5, colorPrint);
+      DrawImageWH(&paint, 82, 162, CDP, 16, 5, colorPrint);
 
-    switch (two_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 153, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 153, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 153, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 153, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 153, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 153, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 153, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 153, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 153, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 153, CD9, 16, 9, colorPrint);
-        break;
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 153, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 153, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 153, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 153, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 153, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 153, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 153, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 153, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 153, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 153, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
-  }
-  if (brig >= 100 && brig < 1000) {
-    byte one_l = brig / 100;
-    byte two_l = brig % 10 / 10;
-    byte three_l = brig % 10;
+    if (brig >= 100 && brig < 1000) {
+      byte one_l = brig / 100;
+      byte two_l = brig % 10 / 10;
+      byte three_l = brig % 10;
 
 #ifdef LANG_EN
-    DrawImageWH(&paint, 82, 116, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 116, LUX, 16, 27, colorPrint);
 #else
-    DrawImageWH(&paint, 82, 116, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 116, LUX, 16, 27, colorPrint);
 #endif
 
-    switch (one_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 172, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 172, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 172, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 172, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 172, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 172, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 172, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 172, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 172, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 172, CD9, 16, 9, colorPrint);
-        break;
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 172, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 172, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 172, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 172, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 172, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 172, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 172, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 172, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 172, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 172, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 163, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 163, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 163, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 163, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 163, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 163, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 163, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 163, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 163, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 163, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 82, 158, CDP, 16, 5, colorPrint);
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 149, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 149, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 149, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 149, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 149, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 149, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 149, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 149, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 149, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 149, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
 
-    switch (two_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 163, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 163, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 163, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 163, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 163, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 163, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 163, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 163, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 163, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 163, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    DrawImageWH(&paint, 82, 158, CDP, 16, 5, colorPrint);
-
-    switch (three_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 149, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 149, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 149, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 149, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 149, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 149, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 149, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 149, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 149, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 149, CD9, 16, 9, colorPrint);
-        break;
-    }
-  }
-
-  if (brig >= 1000 && brig < 10000) {
-    byte one_l = brig / 1000;
-    byte two_l = brig % 1000 / 100;
-    byte three_l = brig % 100 / 10;
-    byte four_l = brig % 10;
+    if (brig >= 1000 && brig < 10000) {
+      byte one_l = brig / 1000;
+      byte two_l = brig % 1000 / 100;
+      byte three_l = brig % 100 / 10;
+      byte four_l = brig % 10;
 
 #ifdef LANG_EN
-    DrawImageWH(&paint, 82, 111, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 111, LUX, 16, 27, colorPrint);
 #else
-    DrawImageWH(&paint, 82, 111, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 111, LUX, 16, 27, colorPrint);
 #endif
 
-    switch (one_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 176, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 176, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 176, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 176, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 176, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 176, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 176, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 176, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 176, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 176, CD9, 16, 9, colorPrint);
-        break;
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 176, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 176, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 176, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 176, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 176, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 176, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 176, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 176, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 176, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 176, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 167, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 167, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 167, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 167, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 167, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 167, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 167, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 167, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 167, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 167, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 158, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 158, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 158, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 158, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 158, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 158, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 158, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 158, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 158, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 158, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 82, 153, CDP, 16, 5, colorPrint);
+
+      switch (four_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 144, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 144, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 144, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 144, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 144, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 144, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 144, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 144, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 144, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 144, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
 
-    switch (two_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 167, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 167, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 167, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 167, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 167, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 167, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 167, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 167, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 167, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 167, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (three_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 158, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 158, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 158, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 158, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 158, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 158, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 158, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 158, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 158, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 158, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    DrawImageWH(&paint, 82, 153, CDP, 16, 5, colorPrint);
-
-    switch (four_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 144, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 144, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 144, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 144, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 144, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 144, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 144, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 144, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 144, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 144, CD9, 16, 9, colorPrint);
-        break;
-    }
-  }
-
-  if (brig >= 10000 && brig < 100000) {
-    byte one_l = brig / 10000;
-    byte two_l = brig % 10000 / 1000;
-    byte three_l = brig % 1000 / 100;
-    byte four_l = brig % 100 / 10;
-    byte five_l = brig % 10;
+    if (brig >= 10000 && brig < 100000) {
+      byte one_l = brig / 10000;
+      byte two_l = brig % 10000 / 1000;
+      byte three_l = brig % 1000 / 100;
+      byte four_l = brig % 100 / 10;
+      byte five_l = brig % 10;
 
 #ifdef LANG_EN
-    DrawImageWH(&paint, 82, 106, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 106, LUX, 16, 27, colorPrint);
 #else
-    DrawImageWH(&paint, 82, 106, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 106, LUX, 16, 27, colorPrint);
 #endif
 
-    switch (one_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 180, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 180, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 180, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 180, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 180, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 180, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 180, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 180, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 180, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 180, CD9, 16, 9, colorPrint);
-        break;
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 180, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 180, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 180, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 180, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 180, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 180, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 180, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 180, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 180, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 180, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 171, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 171, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 171, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 171, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 171, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 171, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 171, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 171, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 171, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 171, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 162, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 162, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 162, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 162, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 162, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 162, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 162, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 162, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 162, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 162, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (four_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 153, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 153, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 153, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 153, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 153, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 153, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 153, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 153, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 153, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 153, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 82, 148, CDP, 16, 5, colorPrint);
+
+      switch (five_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 139, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 139, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 139, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 139, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 139, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 139, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 139, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 139, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 139, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 139, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
 
-    switch (two_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 171, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 171, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 171, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 171, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 171, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 171, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 171, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 171, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 171, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 171, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (three_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 162, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 162, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 162, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 162, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 162, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 162, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 162, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 162, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 162, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 162, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    switch (four_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 153, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 153, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 153, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 153, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 153, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 153, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 153, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 153, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 153, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 153, CD9, 16, 9, colorPrint);
-        break;
-    }
-
-    DrawImageWH(&paint, 82, 148, CDP, 16, 5, colorPrint);
-
-    switch (five_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 139, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 139, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 139, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 139, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 139, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 139, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 139, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 139, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 139, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 139, CD9, 16, 9, colorPrint);
-        break;
-    }
-  }
-
-  if (brig >= 100000 && brig < 1000000) {
-    byte one_l = brig / 100000;
-    byte two_l = brig % 100000 / 10000;
-    byte three_l = brig % 10000 / 1000;
-    byte four_l = brig % 1000 / 100;
-    byte five_l = brig % 100 / 10;
-    byte six_l = brig % 10;
+    if (brig >= 100000 && brig < 1000000) {
+      byte one_l = brig / 100000;
+      byte two_l = brig % 100000 / 10000;
+      byte three_l = brig % 10000 / 1000;
+      byte four_l = brig % 1000 / 100;
+      byte five_l = brig % 100 / 10;
+      byte six_l = brig % 10;
 
 #ifdef LANG_EN
-    DrawImageWH(&paint, 82, 101, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 101, LUX, 16, 27, colorPrint);
 #else
-    DrawImageWH(&paint, 82, 101, LUX, 16, 27, colorPrint);
+      DrawImageWH(&paint, 82, 101, LUX, 16, 27, colorPrint);
 #endif
 
-    switch (one_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 184, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 184, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 184, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 184, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 184, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 184, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 184, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 184, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 184, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 184, CD9, 16, 9, colorPrint);
-        break;
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 184, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 184, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 184, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 184, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 184, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 184, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 184, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 184, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 184, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 184, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 175, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 175, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 175, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 175, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 175, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 175, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 175, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 175, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 175, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 175, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 166, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 166, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 166, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 166, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 166, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 166, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 166, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 166, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 166, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 166, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (four_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 157, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 157, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 157, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 157, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 157, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 157, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 157, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 157, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 157, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 157, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (five_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 148, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 148, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 148, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 148, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 148, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 148, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 148, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 148, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 148, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 148, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 82, 143, CDP, 16, 5, colorPrint);
+
+      switch (six_l) {
+        case 0:
+          DrawImageWH(&paint, 82, 134, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 82, 134, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 82, 134, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 82, 134, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 82, 134, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 82, 134, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 82, 134, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 82, 134, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 82, 134, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 82, 134, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
 
-    switch (two_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 175, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 175, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 175, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 175, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 175, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 175, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 175, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 175, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 175, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 175, CD9, 16, 9, colorPrint);
-        break;
+
+
+
+
+
+
+  } else {
+
+    if (brig < 100) {
+      byte one_l = brig / 10;
+      byte two_l = brig % 10;
+
+#ifdef LANG_EN
+      DrawImageWH(&paint, 6, 120, LUX, 16, 27, colorPrint);
+#else
+      DrawImageWH(&paint, 6, 120, LUX, 16, 27, colorPrint);
+#endif
+
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 167, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 167, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 167, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 167, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 167, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 167, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 167, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 167, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 167, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 167, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 6, 162, CDP, 16, 5, colorPrint);
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 153, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 153, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 153, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 153, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 153, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 153, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 153, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 153, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 153, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 153, CD9, 16, 9, colorPrint);
+          break;
+      }
+    }
+    if (brig >= 100 && brig < 1000) {
+      byte one_l = brig / 100;
+      byte two_l = brig % 10 / 10;
+      byte three_l = brig % 10;
+
+#ifdef LANG_EN
+      DrawImageWH(&paint, 6, 116, LUX, 16, 27, colorPrint);
+#else
+      DrawImageWH(&paint, 6, 116, LUX, 16, 27, colorPrint);
+#endif
+
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 172, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 172, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 172, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 172, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 172, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 172, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 172, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 172, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 172, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 172, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 163, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 163, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 163, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 163, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 163, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 163, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 163, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 163, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 163, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 163, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 6, 158, CDP, 16, 5, colorPrint);
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 149, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 149, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 149, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 149, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 149, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 149, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 149, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 149, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 149, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 149, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
 
-    switch (three_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 166, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 166, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 166, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 166, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 166, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 166, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 166, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 166, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 166, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 166, CD9, 16, 9, colorPrint);
-        break;
+    if (brig >= 1000 && brig < 10000) {
+      byte one_l = brig / 1000;
+      byte two_l = brig % 1000 / 100;
+      byte three_l = brig % 100 / 10;
+      byte four_l = brig % 10;
+
+#ifdef LANG_EN
+      DrawImageWH(&paint, 6, 111, LUX, 16, 27, colorPrint);
+#else
+      DrawImageWH(&paint, 6, 111, LUX, 16, 27, colorPrint);
+#endif
+
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 176, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 176, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 176, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 176, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 176, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 176, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 176, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 176, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 176, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 176, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 167, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 167, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 167, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 167, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 167, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 167, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 167, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 167, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 167, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 167, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 158, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 158, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 158, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 158, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 158, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 158, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 158, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 158, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 158, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 158, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 6, 153, CDP, 16, 5, colorPrint);
+
+      switch (four_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 144, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 144, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 144, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 144, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 144, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 144, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 144, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 144, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 144, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 144, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
 
-    switch (four_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 157, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 157, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 157, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 157, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 157, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 157, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 157, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 157, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 157, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 157, CD9, 16, 9, colorPrint);
-        break;
+    if (brig >= 10000 && brig < 100000) {
+      byte one_l = brig / 10000;
+      byte two_l = brig % 10000 / 1000;
+      byte three_l = brig % 1000 / 100;
+      byte four_l = brig % 100 / 10;
+      byte five_l = brig % 10;
+
+#ifdef LANG_EN
+      DrawImageWH(&paint, 6, 106, LUX, 16, 27, colorPrint);
+#else
+      DrawImageWH(&paint, 6, 106, LUX, 16, 27, colorPrint);
+#endif
+
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 180, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 180, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 180, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 180, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 180, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 180, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 180, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 180, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 180, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 180, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 171, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 171, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 171, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 171, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 171, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 171, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 171, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 171, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 171, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 171, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 162, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 162, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 162, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 162, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 162, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 162, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 162, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 162, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 162, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 162, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (four_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 153, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 153, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 153, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 153, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 153, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 153, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 153, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 153, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 153, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 153, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 6, 148, CDP, 16, 5, colorPrint);
+
+      switch (five_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 139, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 139, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 139, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 139, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 139, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 139, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 139, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 139, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 139, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 139, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
 
-    switch (five_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 148, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 148, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 148, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 148, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 148, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 148, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 148, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 148, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 148, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 148, CD9, 16, 9, colorPrint);
-        break;
-    }
+    if (brig >= 100000 && brig < 1000000) {
+      byte one_l = brig / 100000;
+      byte two_l = brig % 100000 / 10000;
+      byte three_l = brig % 10000 / 1000;
+      byte four_l = brig % 1000 / 100;
+      byte five_l = brig % 100 / 10;
+      byte six_l = brig % 10;
 
-    DrawImageWH(&paint, 82, 143, CDP, 16, 5, colorPrint);
+#ifdef LANG_EN
+      DrawImageWH(&paint, 6, 101, LUX, 16, 27, colorPrint);
+#else
+      DrawImageWH(&paint, 6, 101, LUX, 16, 27, colorPrint);
+#endif
 
-    switch (six_l) {
-      case 0:
-        DrawImageWH(&paint, 82, 134, CD0, 16, 9, colorPrint);
-        break;
-      case 1:
-        DrawImageWH(&paint, 82, 134, CD1, 16, 9, colorPrint);
-        break;
-      case 2:
-        DrawImageWH(&paint, 82, 134, CD2, 16, 9, colorPrint);
-        break;
-      case 3:
-        DrawImageWH(&paint, 82, 134, CD3, 16, 9, colorPrint);
-        break;
-      case 4:
-        DrawImageWH(&paint, 82, 134, CD4, 16, 9, colorPrint);
-        break;
-      case 5:
-        DrawImageWH(&paint, 82, 134, CD5, 16, 9, colorPrint);
-        break;
-      case 6:
-        DrawImageWH(&paint, 82, 134, CD6, 16, 9, colorPrint);
-        break;
-      case 7:
-        DrawImageWH(&paint, 82, 134, CD7, 16, 9, colorPrint);
-        break;
-      case 8:
-        DrawImageWH(&paint, 82, 134, CD8, 16, 9, colorPrint);
-        break;
-      case 9:
-        DrawImageWH(&paint, 82, 134, CD9, 16, 9, colorPrint);
-        break;
+      switch (one_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 184, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 184, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 184, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 184, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 184, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 184, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 184, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 184, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 184, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 184, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (two_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 175, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 175, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 175, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 175, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 175, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 175, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 175, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 175, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 175, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 175, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (three_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 166, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 166, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 166, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 166, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 166, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 166, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 166, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 166, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 166, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 166, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (four_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 157, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 157, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 157, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 157, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 157, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 157, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 157, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 157, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 157, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 157, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      switch (five_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 148, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 148, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 148, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 148, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 148, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 148, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 148, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 148, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 148, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 148, CD9, 16, 9, colorPrint);
+          break;
+      }
+
+      DrawImageWH(&paint, 6, 143, CDP, 16, 5, colorPrint);
+
+      switch (six_l) {
+        case 0:
+          DrawImageWH(&paint, 6, 134, CD0, 16, 9, colorPrint);
+          break;
+        case 1:
+          DrawImageWH(&paint, 6, 134, CD1, 16, 9, colorPrint);
+          break;
+        case 2:
+          DrawImageWH(&paint, 6, 134, CD2, 16, 9, colorPrint);
+          break;
+        case 3:
+          DrawImageWH(&paint, 6, 134, CD3, 16, 9, colorPrint);
+          break;
+        case 4:
+          DrawImageWH(&paint, 6, 134, CD4, 16, 9, colorPrint);
+          break;
+        case 5:
+          DrawImageWH(&paint, 6, 134, CD5, 16, 9, colorPrint);
+          break;
+        case 6:
+          DrawImageWH(&paint, 6, 134, CD6, 16, 9, colorPrint);
+          break;
+        case 7:
+          DrawImageWH(&paint, 6, 134, CD7, 16, 9, colorPrint);
+          break;
+        case 8:
+          DrawImageWH(&paint, 6, 134, CD8, 16, 9, colorPrint);
+          break;
+        case 9:
+          DrawImageWH(&paint, 6, 134, CD9, 16, 9, colorPrint);
+          break;
+      }
     }
   }
 }
@@ -1829,23 +3399,47 @@ void displayLux(float brig_temp) {
 
 void displayPres(float pres, bool metr) {
 
+
+  if (design == false) {
 #ifdef LANG_EN
-  DrawImageWH(&paint, 43, 220, PRESEN, 10, 72, colorPrint);
+    DrawImageWH(&paint, 43, 220, PRESEN, 10, 72, colorPrint);
 #else
-  DrawImageWH(&paint, 43, 220, PRES, 10, 72, colorPrint);
+    DrawImageWH(&paint, 43, 220, PRES, 10, 72, colorPrint);
 #endif
-  int pressure_temp;
-  if ((int)pres < 1000) {
-    pressure_temp = round(pres * 10.0);
   } else {
-    pressure_temp = round(pres);
+    DrawImageWH(&paint, 37 - 12, 251, PRESICON, 17, 17, colorPrint);
   }
 
-  byte one_p = pressure_temp / 1000;
-  byte two_p = pressure_temp % 1000 / 100;
-  byte three_p = pressure_temp % 100 / 10;
-  byte four_p = pressure_temp % 10;
-  if (metr) {
+  int pressure_temp;
+  byte one_p;
+  byte two_p;
+  byte three_p;
+  byte four_p;
+
+  if (design == false) {
+    if ((int)pres < 1000) {
+      pressure_temp = round(pres * 10.0);
+    } else {
+      pressure_temp = round(pres);
+    }
+    one_p = pressure_temp / 1000;
+    two_p = pressure_temp % 1000 / 100;
+    three_p = pressure_temp % 100 / 10;
+    four_p = pressure_temp % 10;
+  } else {
+    pressure_temp = round(pres);
+    if ((int)pres < 1000) {
+      pressure_temp = pressure_temp * 10;
+    }
+    one_p = pressure_temp / 1000;
+    two_p = pressure_temp % 1000 / 100;
+    three_p = pressure_temp % 100 / 10;
+    four_p = pressure_temp % 10;
+  }
+
+
+
+  if (design == false) {
 
 #ifdef LANG_EN
     DrawImageWH(&paint, 86, 226, PAPRESEN, 10, 61, colorPrint);
@@ -2249,360 +3843,497 @@ void displayPres(float pres, bool metr) {
         break;
     }
 #endif
+
   } else {
 
 #ifdef LANG_EN
-    DrawImageWH(&paint, 86, 226, PAPRESEN, 10, 61, colorPrint);
-#else
-    DrawImageWH(&paint, 86, 226, PAPRES, 10, 61, colorPrint);
-#endif
+    DrawImageWH(&paint, 86 - 12, 228, PAPRESEN, 10, 61, colorPrint);
 
     if (one_p == 1) {
 
       switch (one_p) {
         case 1:
-          DrawImageWH(&paint, 59, 272, NPH1, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH1, 25, 16, colorPrint);
           break;
         case 2:
-          DrawImageWH(&paint, 59, 272, NPH2, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH2, 25, 16, colorPrint);
           break;
         case 3:
-          DrawImageWH(&paint, 59, 272, NPH3, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH3, 25, 16, colorPrint);
           break;
         case 4:
-          DrawImageWH(&paint, 59, 272, NPH4, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH4, 25, 16, colorPrint);
           break;
         case 5:
-          DrawImageWH(&paint, 59, 272, NPH5, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH5, 25, 16, colorPrint);
           break;
         case 6:
-          DrawImageWH(&paint, 59, 272, NPH6, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH6, 25, 16, colorPrint);
           break;
         case 7:
-          DrawImageWH(&paint, 59, 272, NPH7, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH7, 25, 16, colorPrint);
           break;
         case 8:
-          DrawImageWH(&paint, 59, 272, NPH8, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH8, 25, 16, colorPrint);
           break;
         case 9:
-          DrawImageWH(&paint, 59, 272, NPH9, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 275, N2PH9, 25, 16, colorPrint);
           break;
       }
 
       switch (two_p) {
         case 0:
-          DrawImageWH(&paint, 59, 256, NPH0, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH0, 25, 16, colorPrint);
           break;
         case 1:
-          DrawImageWH(&paint, 59, 256, NPH1, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH1, 25, 16, colorPrint);
           break;
         case 2:
-          DrawImageWH(&paint, 59, 256, NPH2, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH2, 25, 16, colorPrint);
           break;
         case 3:
-          DrawImageWH(&paint, 59, 256, NPH3, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH3, 25, 16, colorPrint);
           break;
         case 4:
-          DrawImageWH(&paint, 59, 256, NPH4, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH4, 25, 16, colorPrint);
           break;
         case 5:
-          DrawImageWH(&paint, 59, 256, NPH5, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH5, 25, 16, colorPrint);
           break;
         case 6:
-          DrawImageWH(&paint, 59, 256, NPH6, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH6, 25, 16, colorPrint);
           break;
         case 7:
-          DrawImageWH(&paint, 59, 256, NPH7, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH7, 25, 16, colorPrint);
           break;
         case 8:
-          DrawImageWH(&paint, 59, 256, NPH8, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH8, 25, 16, colorPrint);
           break;
         case 9:
-          DrawImageWH(&paint, 59, 256, NPH9, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 259, N2PH9, 25, 16, colorPrint);
           break;
       }
 
       switch (three_p) {
         case 0:
-          DrawImageWH(&paint, 59, 240, NPH0, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH0, 25, 16, colorPrint);
           break;
         case 1:
-          DrawImageWH(&paint, 59, 240, NPH1, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH1, 25, 16, colorPrint);
           break;
         case 2:
-          DrawImageWH(&paint, 59, 240, NPH2, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH2, 25, 16, colorPrint);
           break;
         case 3:
-          DrawImageWH(&paint, 59, 240, NPH3, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH3, 25, 16, colorPrint);
           break;
         case 4:
-          DrawImageWH(&paint, 59, 240, NPH4, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH4, 25, 16, colorPrint);
           break;
         case 5:
-          DrawImageWH(&paint, 59, 240, NPH5, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH5, 25, 16, colorPrint);
           break;
         case 6:
-          DrawImageWH(&paint, 59, 240, NPH6, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH6, 25, 16, colorPrint);
           break;
         case 7:
-          DrawImageWH(&paint, 59, 240, NPH7, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH7, 25, 16, colorPrint);
           break;
         case 8:
-          DrawImageWH(&paint, 59, 240, NPH8, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH8, 25, 16, colorPrint);
           break;
         case 9:
-          DrawImageWH(&paint, 59, 240, NPH9, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 243, N2PH9, 25, 16, colorPrint);
           break;
       }
 
       switch (four_p) {
         case 0:
-          DrawImageWH(&paint, 59, 224, NPH0, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH0, 25, 16, colorPrint);
           break;
         case 1:
-          DrawImageWH(&paint, 59, 224, NPH1, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH1, 25, 16, colorPrint);
           break;
         case 2:
-          DrawImageWH(&paint, 59, 224, NPH2, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 224, N2PH2, 25, 16, colorPrint);
           break;
         case 3:
-          DrawImageWH(&paint, 59, 224, NPH3, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH3, 25, 16, colorPrint);
           break;
         case 4:
-          DrawImageWH(&paint, 59, 224, NPH4, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH4, 25, 16, colorPrint);
           break;
         case 5:
-          DrawImageWH(&paint, 59, 224, NPH5, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH5, 25, 16, colorPrint);
           break;
         case 6:
-          DrawImageWH(&paint, 59, 224, NPH6, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH6, 25, 16, colorPrint);
           break;
         case 7:
-          DrawImageWH(&paint, 59, 224, NPH7, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH7, 25, 16, colorPrint);
           break;
         case 8:
-          DrawImageWH(&paint, 59, 224, NPH8, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH8, 25, 16, colorPrint);
           break;
         case 9:
-          DrawImageWH(&paint, 59, 224, NPH9, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 227, N2PH9, 25, 16, colorPrint);
           break;
       }
     } else {
 
       switch (one_p) {
         case 1:
-          DrawImageWH(&paint, 59, 275, NPH1, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH1, 25, 16, colorPrint);
           break;
         case 2:
-          DrawImageWH(&paint, 59, 275, NPH2, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH2, 25, 16, colorPrint);
           break;
         case 3:
-          DrawImageWH(&paint, 59, 275, NPH3, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH3, 25, 16, colorPrint);
           break;
         case 4:
-          DrawImageWH(&paint, 59, 275, NPH4, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH4, 25, 16, colorPrint);
           break;
         case 5:
-          DrawImageWH(&paint, 59, 275, NPH5, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH5, 25, 16, colorPrint);
           break;
         case 6:
-          DrawImageWH(&paint, 59, 275, NPH6, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH6, 25, 16, colorPrint);
           break;
         case 7:
-          DrawImageWH(&paint, 59, 275, NPH7, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH7, 25, 16, colorPrint);
           break;
         case 8:
-          DrawImageWH(&paint, 59, 275, NPH8, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH8, 25, 16, colorPrint);
           break;
         case 9:
-          DrawImageWH(&paint, 59, 275, NPH9, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 267, N2PH9, 25, 16, colorPrint);
           break;
       }
 
       switch (two_p) {
         case 0:
-          DrawImageWH(&paint, 59, 259, NPH0, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH0, 25, 16, colorPrint);
           break;
         case 1:
-          DrawImageWH(&paint, 59, 259, NPH1, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH1, 25, 16, colorPrint);
           break;
         case 2:
-          DrawImageWH(&paint, 59, 259, NPH2, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH2, 25, 16, colorPrint);
           break;
         case 3:
-          DrawImageWH(&paint, 59, 259, NPH3, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH3, 25, 16, colorPrint);
           break;
         case 4:
-          DrawImageWH(&paint, 59, 259, NPH4, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH4, 25, 16, colorPrint);
           break;
         case 5:
-          DrawImageWH(&paint, 59, 259, NPH5, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH5, 25, 16, colorPrint);
           break;
         case 6:
-          DrawImageWH(&paint, 59, 259, NPH6, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH6, 25, 16, colorPrint);
           break;
         case 7:
-          DrawImageWH(&paint, 59, 259, NPH7, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH7, 25, 16, colorPrint);
           break;
         case 8:
-          DrawImageWH(&paint, 59, 259, NPH8, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH8, 25, 16, colorPrint);
           break;
         case 9:
-          DrawImageWH(&paint, 59, 259, NPH9, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 251, N2PH9, 25, 16, colorPrint);
           break;
       }
 
       switch (three_p) {
         case 0:
-          DrawImageWH(&paint, 59, 243, NPH0, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH0, 25, 16, colorPrint);
           break;
         case 1:
-          DrawImageWH(&paint, 59, 243, NPH1, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH1, 25, 16, colorPrint);
           break;
         case 2:
-          DrawImageWH(&paint, 59, 243, NPH2, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH2, 25, 16, colorPrint);
           break;
         case 3:
-          DrawImageWH(&paint, 59, 243, NPH3, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH3, 25, 16, colorPrint);
           break;
         case 4:
-          DrawImageWH(&paint, 59, 243, NPH4, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH4, 25, 16, colorPrint);
           break;
         case 5:
-          DrawImageWH(&paint, 59, 243, NPH5, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH5, 25, 16, colorPrint);
           break;
         case 6:
-          DrawImageWH(&paint, 59, 243, NPH6, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH6, 25, 16, colorPrint);
           break;
         case 7:
-          DrawImageWH(&paint, 59, 243, NPH7, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH7, 25, 16, colorPrint);
           break;
         case 8:
-          DrawImageWH(&paint, 59, 243, NPH8, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH8, 25, 16, colorPrint);
           break;
         case 9:
-          DrawImageWH(&paint, 59, 243, NPH9, 23, 16, colorPrint);
-          break;
-      }
-
-      DrawImageWH(&paint, 78, 238, NPHP, 5, 5, colorPrint);
-
-      switch (four_p) {
-        case 0:
-          DrawImageWH(&paint, 59, 222, NPH0, 23, 16, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 59, 222, NPH1, 23, 16, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 59, 222, NPH2, 23, 16, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 59, 222, NPH3, 23, 16, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 59, 222, NPH4, 23, 16, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 59, 222, NPH5, 23, 16, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 59, 222, NPH6, 23, 16, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 59, 222, NPH7, 23, 16, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 59, 222, NPH8, 23, 16, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 59, 222, NPH9, 23, 16, colorPrint);
+          DrawImageWH(&paint, 59 - 12, 235, N2PH9, 25, 16, colorPrint);
           break;
       }
     }
+
+
+#else
+    DrawImageWH(&paint, 86 - 12, 228, MHPRES, 10, 61, colorPrint);
+
+    switch (one_p) {
+      case 1:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH1, 25, 16, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH2, 25, 16, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH3, 25, 16, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH4, 25, 16, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH5, 25, 16, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH6, 25, 16, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH7, 25, 16, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH8, 25, 16, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 59 - 12, 267, N2PH9, 25, 16, colorPrint);
+        break;
+    }
+
+    switch (two_p) {
+      case 0:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH0, 25, 16, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH1, 25, 16, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH2, 25, 16, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH3, 25, 16, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH4, 25, 16, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH5, 25, 16, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH6, 25, 16, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH7, 25, 16, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH8, 25, 16, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 59 - 12, 251, N2PH9, 25, 16, colorPrint);
+        break;
+    }
+
+    switch (three_p) {
+      case 0:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH0, 25, 16, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH1, 25, 16, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH2, 25, 16, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH3, 25, 16, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH4, 25, 16, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH5, 25, 16, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH6, 25, 16, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH7, 25, 16, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH8, 25, 16, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 59 - 12, 235, N2PH9, 25, 16, colorPrint);
+        break;
+    }
+#endif
   }
 }
 
 
 void displayHum(float hum) {
 
+  if (design == false) {
 #ifdef LANG_EN
-  DrawImageWH(&paint, 43, 4, HUMEN, 10, 72, colorPrint);
+    DrawImageWH(&paint, 43, 4, HUMEN, 10, 72, colorPrint);
 #else
-  DrawImageWH(&paint, 43, 4, HUM, 10, 72, colorPrint);
+    DrawImageWH(&paint, 43, 4, HUM, 10, 72, colorPrint);
 #endif
+  } else {
+    DrawImageWH(&paint, 37 - 12, 31 - 8, HUMICON, 17, 17, colorPrint);
+  }
 
   int hum_temp = round(hum);
 
   byte one_h = hum_temp / 10;
   byte two_h = hum_temp % 10;
 
-  DrawImageWH(&paint, 86, 34, PRHUM, 9, 10, colorPrint);
 
-  switch (one_h) {
-    case 0:
-      DrawImageWH(&paint, 59, 39, NPH0, 23, 16, colorPrint);
-      break;
-    case 1:
-      DrawImageWH(&paint, 59, 39, NPH1, 23, 16, colorPrint);
-      break;
-    case 2:
-      DrawImageWH(&paint, 59, 39, NPH2, 23, 16, colorPrint);
-      break;
-    case 3:
-      DrawImageWH(&paint, 59, 39, NPH3, 23, 16, colorPrint);
-      break;
-    case 4:
-      DrawImageWH(&paint, 59, 39, NPH4, 23, 16, colorPrint);
-      break;
-    case 5:
-      DrawImageWH(&paint, 59, 39, NPH5, 23, 16, colorPrint);
-      break;
-    case 6:
-      DrawImageWH(&paint, 59, 39, NPH6, 23, 16, colorPrint);
-      break;
-    case 7:
-      DrawImageWH(&paint, 59, 39, NPH7, 23, 16, colorPrint);
-      break;
-    case 8:
-      DrawImageWH(&paint, 59, 39, NPH8, 23, 16, colorPrint);
-      break;
-    case 9:
-      DrawImageWH(&paint, 59, 39, NPH6, 23, 16, colorPrint);
-      break;
-  }
+  if (design == false) {
+    DrawImageWH(&paint, 86, 34 - 8, PRHUM, 9, 10, colorPrint);
+    switch (one_h) {
+      case 0:
+        DrawImageWH(&paint, 59, 39, NPH0, 23, 16, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 59, 39, NPH1, 23, 16, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 59, 39, NPH2, 23, 16, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 59, 39, NPH3, 23, 16, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 59, 39, NPH4, 23, 16, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 59, 39, NPH5, 23, 16, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 59, 39, NPH6, 23, 16, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 59, 39, NPH7, 23, 16, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 59, 39, NPH8, 23, 16, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 59, 39, NPH6, 23, 16, colorPrint);
+        break;
+    }
 
-  switch (two_h) {
-    case 0:
-      DrawImageWH(&paint, 59, 23, NPH0, 23, 16, colorPrint);
-      break;
-    case 1:
-      DrawImageWH(&paint, 59, 23, NPH1, 23, 16, colorPrint);
-      break;
-    case 2:
-      DrawImageWH(&paint, 59, 23, NPH2, 23, 16, colorPrint);
-      break;
-    case 3:
-      DrawImageWH(&paint, 59, 23, NPH3, 23, 16, colorPrint);
-      break;
-    case 4:
-      DrawImageWH(&paint, 59, 23, NPH4, 23, 16, colorPrint);
-      break;
-    case 5:
-      DrawImageWH(&paint, 59, 23, NPH5, 23, 16, colorPrint);
-      break;
-    case 6:
-      DrawImageWH(&paint, 59, 23, NPH6, 23, 16, colorPrint);
-      break;
-    case 7:
-      DrawImageWH(&paint, 59, 23, NPH7, 23, 16, colorPrint);
-      break;
-    case 8:
-      DrawImageWH(&paint, 59, 23, NPH8, 23, 16, colorPrint);
-      break;
-    case 9:
-      DrawImageWH(&paint, 59, 23, NPH9, 23, 16, colorPrint);
-      break;
+    switch (two_h) {
+      case 0:
+        DrawImageWH(&paint, 592, 23, NPH0, 23, 16, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 59, 23, NPH1, 23, 16, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 59, 23, NPH2, 23, 16, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 59, 23, NPH3, 23, 16, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 59, 23, NPH4, 23, 16, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 59, 23, NPH5, 23, 16, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 59, 23, NPH6, 23, 16, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 59, 23, NPH7, 23, 16, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 59, 23, NPH8, 23, 16, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 59, 23, NPH9, 23, 16, colorPrint);
+        break;
+    }
+  } else {
+    DrawImageWH(&paint, 86 - 12, 34 - 8, PRHUM, 9, 10, colorPrint);
+    switch (one_h) {
+      case 0:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH0, 25, 16, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH1, 25, 16, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH2, 25, 16, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH3, 25, 16, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH4, 25, 16, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH5, 25, 16, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH6, 25, 16, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH7, 25, 16, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH8, 25, 16, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 59 - 12, 39 - 8, N2PH6, 25, 16, colorPrint);
+        break;
+    }
+
+    switch (two_h) {
+      case 0:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH0, 25, 16, colorPrint);
+        break;
+      case 1:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH1, 25, 16, colorPrint);
+        break;
+      case 2:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH2, 25, 16, colorPrint);
+        break;
+      case 3:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH3, 25, 16, colorPrint);
+        break;
+      case 4:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH4, 25, 16, colorPrint);
+        break;
+      case 5:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH5, 25, 16, colorPrint);
+        break;
+      case 6:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH6, 25, 16, colorPrint);
+        break;
+      case 7:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH7, 25, 16, colorPrint);
+        break;
+      case 8:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH8, 25, 16, colorPrint);
+        break;
+      case 9:
+        DrawImageWH(&paint, 59 - 12, 23 - 8, N2PH9, 25, 16, colorPrint);
+        break;
+    }
   }
 }
 
@@ -2612,118 +4343,118 @@ void displayLink(int8_t s) {
   if (flag_nogateway_mode == true) {
     s = 0;
   }
+  if (design == false) {
+    if (s < 100) {
+      if (s >= 10) {
+        int8_t one_s = s / 10;
+        int8_t two_s = s % 10;
 
-  if (s < 100) {
-    if (s >= 10) {
-      int8_t one_s = s / 10;
-      int8_t two_s = s % 10;
+        switch (one_s) {
+          case 1:
+            DrawImageWH(&paint, 111, 55, CD1, 16, 9, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 111, 55, CD2, 16, 9, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 111, 55, CD3, 16, 9, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 111, 55, CD4, 16, 9, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 111, 55, CD5, 16, 9, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 111, 55, CD6, 16, 9, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 111, 55, CD7, 16, 9, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 111, 55, CD8, 16, 9, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 111, 55, CD9, 16, 9, colorPrint);
+            break;
+        }
 
-      switch (one_s) {
-        case 1:
-          DrawImageWH(&paint, 111, 55, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 111, 55, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 111, 55, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 111, 55, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 111, 55, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 111, 55, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 111, 55, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 111, 55, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 111, 55, CD9, 16, 9, colorPrint);
-          break;
-      }
+        switch (two_s) {
+          case 0:
+            DrawImageWH(&paint, 111, 46, CD0, 16, 9, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 111, 46, CD1, 16, 9, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 111, 46, CD2, 16, 9, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 111, 46, CD3, 16, 9, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 111, 46, CD4, 16, 9, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 111, 46, CD5, 16, 9, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 111, 46, CD6, 16, 9, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 111, 46, CD7, 16, 9, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 111, 46, CD8, 16, 9, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 111, 46, CD9, 16, 9, colorPrint);
+            break;
+        }
+      } else {
+        int8_t one_s = s;
 
-      switch (two_s) {
-        case 0:
-          DrawImageWH(&paint, 111, 46, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 111, 46, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 111, 46, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 111, 46, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 111, 46, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 111, 46, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 111, 46, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 111, 46, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 111, 46, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 111, 46, CD9, 16, 9, colorPrint);
-          break;
+        switch (one_s) {
+          case 0:
+            DrawImageWH(&paint, 111, 46, CD0, 16, 9, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 111, 46, CD1, 16, 9, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 111, 46, CD2, 16, 9, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 111, 46, CD3, 16, 9, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 111, 46, CD4, 16, 9, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 111, 46, CD5, 16, 9, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 111, 46, CD6, 16, 9, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 111, 46, CD7, 16, 9, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 111, 46, CD8, 16, 9, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 111, 46, CD9, 16, 9, colorPrint);
+            break;
+        }
       }
     } else {
-      int8_t one_s = s;
-
-      switch (one_s) {
-        case 0:
-          DrawImageWH(&paint, 111, 46, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 111, 46, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 111, 46, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 111, 46, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 111, 46, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 111, 46, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 111, 46, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 111, 46, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 111, 46, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 111, 46, CD9, 16, 9, colorPrint);
-          break;
-      }
+      DrawImageWH(&paint, 111, 66, CD1, 16, 9, colorPrint);
+      DrawImageWH(&paint, 111, 55, CD0, 16, 9, colorPrint);
+      DrawImageWH(&paint, 111, 46, CD0, 16, 9, colorPrint);
     }
-  } else {
-    DrawImageWH(&paint, 111, 66, CD1, 16, 9, colorPrint);
-    DrawImageWH(&paint, 111, 55, CD0, 16, 9, colorPrint);
-    DrawImageWH(&paint, 111, 46, CD0, 16, 9, colorPrint);
+
+    DrawImageWH(&paint, 111, 37, CDPR, 16, 9, colorPrint);
   }
-
-  DrawImageWH(&paint, 111, 37, CDPR, 16, 9, colorPrint);
-
 
   if (s == 0) {
     DrawImageWH(&paint, 111, 5, LINK0, 16, 29, colorPrint);
@@ -2748,116 +4479,118 @@ void displayLink(int8_t s) {
 
 void displayBatt(uint8_t b) {
 
-  if (b < 100) {
-    if (b >= 10) {
-      uint8_t one_b = b / 10;
-      uint8_t two_b = b % 10;
+  if (design == false) {
+    if (b < 100) {
+      if (b >= 10) {
+        uint8_t one_b = b / 10;
+        uint8_t two_b = b % 10;
 
-      switch (one_b) {
-        case 1:
-          DrawImageWH(&paint, 111, 244, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 111, 244, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 111, 244, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 111, 244, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 111, 244, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 111, 244, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 111, 244, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 111, 244, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 111, 244, CD9, 16, 9, colorPrint);
-          break;
-      }
+        switch (one_b) {
+          case 1:
+            DrawImageWH(&paint, 111, 244, CD1, 16, 9, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 111, 244, CD2, 16, 9, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 111, 244, CD3, 16, 9, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 111, 244, CD4, 16, 9, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 111, 244, CD5, 16, 9, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 111, 244, CD6, 16, 9, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 111, 244, CD7, 16, 9, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 111, 244, CD8, 16, 9, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 111, 244, CD9, 16, 9, colorPrint);
+            break;
+        }
 
-      switch (two_b) {
-        case 0:
-          DrawImageWH(&paint, 111, 235, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 111, 235, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 111, 235, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 111, 235, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 111, 235, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 111, 235, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 111, 235, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 111, 235, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 111, 235, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 111, 235, CD9, 16, 9, colorPrint);
-          break;
+        switch (two_b) {
+          case 0:
+            DrawImageWH(&paint, 111, 235, CD0, 16, 9, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 111, 235, CD1, 16, 9, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 111, 235, CD2, 16, 9, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 111, 235, CD3, 16, 9, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 111, 235, CD4, 16, 9, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 111, 235, CD5, 16, 9, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 111, 235, CD6, 16, 9, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 111, 235, CD7, 16, 9, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 111, 235, CD8, 16, 9, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 111, 235, CD9, 16, 9, colorPrint);
+            break;
+        }
+      } else {
+        uint8_t one_b = b;
+
+        switch (one_b) {
+          case 0:
+            DrawImageWH(&paint, 111, 235, CD0, 16, 9, colorPrint);
+            break;
+          case 1:
+            DrawImageWH(&paint, 111, 235, CD1, 16, 9, colorPrint);
+            break;
+          case 2:
+            DrawImageWH(&paint, 111, 235, CD2, 16, 9, colorPrint);
+            break;
+          case 3:
+            DrawImageWH(&paint, 111, 235, CD3, 16, 9, colorPrint);
+            break;
+          case 4:
+            DrawImageWH(&paint, 111, 235, CD4, 16, 9, colorPrint);
+            break;
+          case 5:
+            DrawImageWH(&paint, 111, 235, CD5, 16, 9, colorPrint);
+            break;
+          case 6:
+            DrawImageWH(&paint, 111, 235, CD6, 16, 9, colorPrint);
+            break;
+          case 7:
+            DrawImageWH(&paint, 111, 235, CD7, 16, 9, colorPrint);
+            break;
+          case 8:
+            DrawImageWH(&paint, 111, 235, CD8, 16, 9, colorPrint);
+            break;
+          case 9:
+            DrawImageWH(&paint, 111, 235, CD9, 16, 9, colorPrint);
+            break;
+        }
       }
     } else {
-      uint8_t one_b = b;
-
-      switch (one_b) {
-        case 0:
-          DrawImageWH(&paint, 111, 235, CD0, 16, 9, colorPrint);
-          break;
-        case 1:
-          DrawImageWH(&paint, 111, 235, CD1, 16, 9, colorPrint);
-          break;
-        case 2:
-          DrawImageWH(&paint, 111, 235, CD2, 16, 9, colorPrint);
-          break;
-        case 3:
-          DrawImageWH(&paint, 111, 235, CD3, 16, 9, colorPrint);
-          break;
-        case 4:
-          DrawImageWH(&paint, 111, 235, CD4, 16, 9, colorPrint);
-          break;
-        case 5:
-          DrawImageWH(&paint, 111, 235, CD5, 16, 9, colorPrint);
-          break;
-        case 6:
-          DrawImageWH(&paint, 111, 235, CD6, 16, 9, colorPrint);
-          break;
-        case 7:
-          DrawImageWH(&paint, 111, 235, CD7, 16, 9, colorPrint);
-          break;
-        case 8:
-          DrawImageWH(&paint, 111, 235, CD8, 16, 9, colorPrint);
-          break;
-        case 9:
-          DrawImageWH(&paint, 111, 235, CD9, 16, 9, colorPrint);
-          break;
-      }
+      DrawImageWH(&paint, 111, 235, CD0, 16, 9, colorPrint);
+      DrawImageWH(&paint, 111, 244, CD0, 16, 9, colorPrint);
+      DrawImageWH(&paint, 111, 253, CD1, 16, 9, colorPrint);
     }
-  } else {
-    DrawImageWH(&paint, 111, 235, CD0, 16, 9, colorPrint);
-    DrawImageWH(&paint, 111, 244, CD0, 16, 9, colorPrint);
-    DrawImageWH(&paint, 111, 253, CD1, 16, 9, colorPrint);
-  }
 
-  DrawImageWH(&paint, 111, 226, CDPR, 16, 9, colorPrint);
+    DrawImageWH(&paint, 111, 226, CDPR, 16, 9, colorPrint);
+  }
 
   if (b < 2) {
     DrawImageWH(&paint, 111, 262, BAT0, 16, 29, colorPrint);
@@ -2983,10 +4716,10 @@ void displayStart() {
   epd.ClearFrameMemory(0xFF);   // bit set = white, bit reset = black
   epd.DisplayFrame();
   paint.Clear(opposite_colorPrint);
-  DrawImageWH(&paint, 32, 51, Especially, 64, 192, colorPrint);
+  DrawImageWH(&paint, 0, 0, Especially, 128, 296, colorPrint);
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
-  hwSleep(7000);
+  hwSleep(4000);
 #endif
   // ###################################           Especially for            ################################### //
 
@@ -3047,6 +4780,7 @@ void reseteinkset() {
   updateink2 = false;
   updateink3 = false;
   updateink4 = false;
+  updateink5 = false;
   updateinkclear = false;
 }
 
@@ -3061,8 +4795,7 @@ void clearOne() {
   }
 }
 
-
-void einkZeropush() {
+void einkZeropush0() {
   epd.Reset();
   if (colorPrint == true) {
     epd.ClearFrameMemory(0xFF);
@@ -3073,6 +4806,56 @@ void einkZeropush() {
   }
   paint.SetWidth(128);
   paint.SetHeight(296);
+  paint.Clear(opposite_colorPrint);
+
+#ifdef LANG_EN
+  DrawImageWH(&paint, 32, 51, COLOREN, 64, 192, colorPrint);
+#else
+  DrawImageWH(&paint, 32, 51, COLOR, 64, 192, colorPrint);
+#endif
+  epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
+  epd.DisplayFrame();
+}
+
+
+void einkZeroend0() {
+  paint.Clear(opposite_colorPrint);
+#ifdef LANG_EN
+  DrawImageWH(&paint, 32, 51, COLORONEN, 64, 192, colorPrint);
+#else
+  DrawImageWH(&paint, 32, 51, COLORON, 64, 192, colorPrint);
+#endif
+  epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
+  epd.DisplayFrame();
+}
+
+
+void einkZeropush1() {
+  paint.Clear(opposite_colorPrint);
+#ifdef LANG_EN
+  DrawImageWH(&paint, 32, 51, DESIGNEN, 64, 192, colorPrint);
+#else
+  DrawImageWH(&paint, 32, 51, DESIGN, 64, 192, colorPrint);
+#endif
+  epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
+  epd.DisplayFrame();
+}
+
+
+void einkZeroend1() {
+  paint.Clear(opposite_colorPrint);
+
+#ifdef LANG_EN
+  DrawImageWH(&paint, 32, 51, DESIGNONEN, 64, 192, colorPrint);
+#else
+  DrawImageWH(&paint, 32, 51, DESIGNON, 64, 192, colorPrint);
+#endif
+
+  epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
+  epd.DisplayFrame();
+}
+
+void einkZeropush() {
   paint.Clear(opposite_colorPrint);
   if (flag_nogateway_mode == false) {
 #ifdef LANG_EN
@@ -3114,13 +4897,11 @@ void einkZeroend() {
 
 void einkOnepush() {
   paint.Clear(opposite_colorPrint);
-
 #ifdef LANG_EN
   DrawImageWH(&paint, 32, 51, PRESENTEN, 64, 192, colorPrint);
 #else
   DrawImageWH(&paint, 32, 51, PRESENT, 64, 192, colorPrint);
 #endif
-
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
 }
@@ -3177,15 +4958,15 @@ void einkTwoend() {
 
 }
 
-
-void reportTimeInk() {
+/*
+  void reportTimeInk() {
   paint.Clear(opposite_colorPrint);
 
-#ifdef LANG_EN
+  #ifdef LANG_EN
   DrawImageWH(&paint, 32, 51, NEWSENSINTEN, 64, 192, colorPrint);
-#else
+  #else
   DrawImageWH(&paint, 32, 51, NEWSENSINT, 64, 192, colorPrint);
-#endif
+  #endif
 
   if (timeSend >= 10) {
     byte one_t = timeSend / 10;
@@ -3289,8 +5070,8 @@ void reportTimeInk() {
   epd.SetFrameMemory(paint.GetImage(), 0, 0, paint.GetWidth(), paint.GetHeight());
   epd.DisplayFrame();
   wait(2000);
-}
-
+  }
+*/
 
 void reportBattInk() {
   paint.Clear(opposite_colorPrint);
@@ -3468,17 +5249,6 @@ void before()
 
   happy_init();
 
-  timeSend = loadState(102);
-  if (timeSend > 60) {
-    timeSend = 1;
-    saveState(102, timeSend);
-  }
-  if (timeSend <= 0) {
-    timeSend = 1;
-    saveState(102, timeSend);
-  }
-  //timeSend = 1; // для теста, 1 минута
-
   battSend = loadState(103);
   if (battSend > 24) {
     battSend = 4;
@@ -3496,9 +5266,20 @@ void before()
   colorChange(loadState(106));
   //colorChange(false); // для теста, true или false
 
+  if (loadState(107) > 1) {
+    saveState(107, 1);
+  }
+
   setSound = loadState(107);
 
   //setSound = 1; // для теста, вкл. или выкл.
+
+
+  if (loadState(109) > 1) {
+    saveState(109, 0);
+  }
+  design = loadState(109);
+
 
   timeConf();
   blinkLed ();
@@ -3600,16 +5381,6 @@ void presentation()
         }
       }
 
-      if (mesTimeset == false) {
-        check = present(SET_TIME_SEND_ID, S_CUSTOM, "T&H SEND INTERVAL | Min");
-        if (!check) {
-          wait(shortWait * 7);
-          _transportSM.failedUplinkTransmissions = 0;
-        } else {
-          mesTimeset = true;
-        }
-      }
-
       if (mesBatset == false) {
         check = present(SET_BATT_SEND_ID, S_CUSTOM, "BATT SEND INTERTVAL | H");
         if (!check) {
@@ -3640,6 +5411,16 @@ void presentation()
         }
       }
 
+      if (mesDesignset == false) {
+        check = present(SET_DESIGN_ID, S_CUSTOM, "DESIGN");
+        if (!check) {
+          wait(shortWait * 7);
+          _transportSM.failedUplinkTransmissions = 0;
+        } else {
+          mesDesignset = true;
+        }
+      }
+
 #ifdef BIZZER
       if (mesSoundset == false) {
         check = present(SET_SOUND_ID, S_CUSTOM, "SOUND ON/OFF");
@@ -3651,7 +5432,7 @@ void presentation()
         }
       }
 #endif
-      if (mesColorset == true && mesRes == true && mesBatset == true && mesTimeset == true && mesBat == true && mesSig == true && mesForec == true && mesBaro == true && mesHum == true && mesTemp == true) {
+      if (mesDesignset == true && mesColorset == true && mesRes == true && mesBatset == true && mesBat == true && mesSig == true && mesForec == true && mesBaro == true && mesHum == true && mesTemp == true) {
         needPresent = false;
 #ifdef BIZZER
         if (mesSoundset == false) {
@@ -3743,9 +5524,9 @@ void loop() {
             previousMillis = millis();
           }
           if (digitalRead(PIN_BUTTON) == LOW && button_flag == true) {
-            if ((millis() - previousMillis > 0) && (millis() - previousMillis <= 4500)) {
+            if ((millis() - previousMillis > 1000) && (millis() - previousMillis <= 4500)) {
               if (updateink1 == false) {
-                einkZeropush();
+                einkZeropush0();
                 updateink1 = true;
               }
             }
@@ -3757,7 +5538,7 @@ void loop() {
             }
             if ((millis() - previousMillis > 5500) && (millis() - previousMillis <= 8500)) {
               if (updateink2 == false) {
-                einkOnepush();
+                einkZeropush1();
                 updateink2 = true;
                 updateinkclear = false;
               }
@@ -3770,12 +5551,38 @@ void loop() {
             }
             if ((millis() - previousMillis > 9500) && (millis() - previousMillis <= 12500)) {
               if (updateink3 == false) {
-                einkOnePluspush();
+                einkZeropush();
                 updateink3 = true;
                 updateinkclear = false;
               }
             }
-            if (millis() - previousMillis > 12500) {
+            if ((millis() - previousMillis > 12500) && (millis() - previousMillis <= 13500)) {
+              if (updateinkclear == false) {
+                clearOne();
+                updateinkclear = true;
+              }
+            }
+            if ((millis() - previousMillis > 13500) && (millis() - previousMillis <= 16500)) {
+              if (updateink4 == false) {
+                einkOnepush();
+                updateink4 = true;
+                updateinkclear = false;
+              }
+            }
+            if ((millis() - previousMillis > 16500) && (millis() - previousMillis <= 17500)) {
+              if (updateinkclear == false) {
+                clearOne();
+                updateinkclear = true;
+              }
+            }
+            if ((millis() - previousMillis > 17500) && (millis() - previousMillis <= 20500)) {
+              if (updateink5 == false) {
+                einkOnePluspush();
+                updateink5 = true;
+                updateinkclear = false;
+              }
+            }
+            if (millis() - previousMillis > 20500) {
               if (updateinkclear == false) {
                 clearOne();
                 updateinkclear = true;
@@ -3785,7 +5592,63 @@ void loop() {
           }
           if (digitalRead(PIN_BUTTON) == HIGH && button_flag == true) {
 
-            if ((millis() - previousMillis <= 4500) && (button_flag == true))
+            if ((millis() - previousMillis > 1000 && millis() - previousMillis <= 4500) && button_flag == true)
+            {
+              einkZeroend0();
+              reseteinkset();
+              if (colorPrint == true) {
+                colorPrint = false;
+                colorChange(colorPrint);
+              } else {
+                colorPrint = true;
+                colorChange(colorPrint);
+              }
+              sendAfterResTask = true;
+              changeC = true;
+              sleepTimeCount = 0;
+              readData();
+              transportReInitialise();
+              wait(shortWait);
+              sendData();
+              transportDisable();
+              wait(shortWait);
+              displayUpdate(temperatureSens, humiditySens, pressureSens, metric);
+              wait(shortWait);
+              change = false;
+              button_flag = false;
+              buttIntStatus = 0;
+              nosleep = false;
+            }
+
+            if ((millis() - previousMillis > 5500 && millis() - previousMillis <= 8500) && button_flag == true)
+            {
+              einkZeroend1();
+              reseteinkset();
+              if (design == true) {
+                design = false;
+                saveState(109, design);
+              } else {
+                design = true;
+                saveState(109, design);
+              }
+              sendAfterResTask = true;
+              changeD = true;
+              sleepTimeCount = 0;
+              readData();
+              transportReInitialise();
+              wait(shortWait);
+              sendData();
+              transportDisable();
+              wait(shortWait);
+              displayUpdate(temperatureSens, humiditySens, pressureSens, metric);
+              wait(shortWait);
+              change = false;
+              button_flag = false;
+              buttIntStatus = 0;
+              nosleep = false;
+            }
+
+            if ((millis() - previousMillis > 9500) && (millis() - previousMillis <= 12500) && (button_flag == true))
             {
               einkZeroend();
               reseteinkset();
@@ -3798,7 +5661,8 @@ void loop() {
               wait(shortWait);
               configMillis = millis();
             }
-            if ((millis() - previousMillis > 5500 && millis() - previousMillis <= 8500) && button_flag == true)
+
+            if ((millis() - previousMillis > 13500) && (millis() - previousMillis <= 16500) && (button_flag == true))
             {
               einkOneend();
               reseteinkset();
@@ -3815,12 +5679,14 @@ void loop() {
               BATT_COUNT = BATT_TIME;
               sleepTimeCount = SLEEP_TIME;
             }
-            if ((millis() - previousMillis > 9500) && (millis() - previousMillis <= 12500) && (button_flag == true))
+
+            if ((millis() - previousMillis > 17500) && (millis() - previousMillis <= 20500) && (button_flag == true))
             {
               einkOnePlusend();
               new_device();
             }
-            if ((((millis() - previousMillis > 4500) && (millis() - previousMillis <= 5500)) || ((millis() - previousMillis > 8500) && (millis() - previousMillis <= 9500)) || (millis() - previousMillis > 12500) ) && (button_flag == true) )
+
+            if (((millis() - previousMillis < 1000) || ((millis() - previousMillis > 4500) && (millis() - previousMillis <= 5500)) || ((millis() - previousMillis > 8500) && (millis() - previousMillis <= 9500)) || ((millis() - previousMillis > 12500) && (millis() - previousMillis <= 13500)) || ((millis() - previousMillis > 16500) && (millis() - previousMillis <= 17500)) || (millis() - previousMillis > 20500) ) && (button_flag == true) )
             {
               wdt_nrfReset();
               change = true;
@@ -3829,6 +5695,7 @@ void loop() {
               button_flag = false;
               buttIntStatus = 0;
             }
+
           }
           wdt_nrfReset();
         } else {
@@ -3871,9 +5738,9 @@ void loop() {
           previousMillis = millis();
         }
         if (digitalRead(PIN_BUTTON) == LOW && button_flag == true) {
-          if ((millis() - previousMillis > 0) && (millis() - previousMillis <= 4500)) {
+          if ((millis() - previousMillis > 1000) && (millis() - previousMillis <= 4500)) {
             if (updateink1 == false) {
-              einkZeropush();
+              einkZeropush0();
               updateink1 = true;
             }
           }
@@ -3885,12 +5752,38 @@ void loop() {
           }
           if ((millis() - previousMillis > 5500) && (millis() - previousMillis <= 8500)) {
             if (updateink2 == false) {
-              einkOnePluspush();
+              einkZeropush1();
               updateink2 = true;
               updateinkclear = false;
             }
           }
-          if (millis() - previousMillis > 8500) {
+          if ((millis() - previousMillis > 8500) && (millis() - previousMillis <= 9500)) {
+            if (updateinkclear == false) {
+              clearOne();
+              updateinkclear = true;
+            }
+          }
+          if ((millis() - previousMillis > 9500) && (millis() - previousMillis <= 12500)) {
+            if (updateink3 == false) {
+              einkZeropush();
+              updateink3 = true;
+              updateinkclear = false;
+            }
+          }
+          if ((millis() - previousMillis > 12500) && (millis() - previousMillis <= 13500)) {
+            if (updateinkclear == false) {
+              clearOne();
+              updateinkclear = true;
+            }
+          }
+          if ((millis() - previousMillis > 13500) && (millis() - previousMillis <= 16500)) {
+            if (updateink4 == false) {
+              einkOnePluspush();
+              updateink4 = true;
+              updateinkclear = false;
+            }
+          }
+          if (millis() - previousMillis > 16500) {
             if (updateinkclear == false) {
               clearOne();
               updateinkclear = true;
@@ -3899,7 +5792,52 @@ void loop() {
           wdt_nrfReset();
         }
         if (digitalRead(PIN_BUTTON) == HIGH && button_flag == true) {
-          if (millis() - previousMillis <= 4500 && button_flag == true)
+          if ((millis() - previousMillis > 1000 && millis() - previousMillis <= 4500) && button_flag == true)
+          {
+            wdt_nrfReset();
+            einkZeroend0();
+            reseteinkset();
+            if (colorPrint == true) {
+              colorPrint = false;
+              colorChange(colorPrint);
+            } else {
+              colorPrint = true;
+              colorChange(colorPrint);
+            }
+            sendAfterResTask = true;
+            changeC = true;
+            sleepTimeCount = 0;
+            readData();
+            wait(shortWait);
+            displayUpdate(temperatureSens, humiditySens, pressureSens, metric);
+            wait(shortWait);
+            button_flag = false;
+            buttIntStatus = 0;
+            nosleep = false;
+          }
+          if ((millis() - previousMillis > 5500) && (millis() - previousMillis <= 8500) && (button_flag == true))
+          {
+            einkZeroend1();
+            reseteinkset();
+            if (design == true) {
+              design = false;
+              saveState(109, design);
+            } else {
+              design = true;
+              saveState(109, design);
+            }
+            sendAfterResTask = true;
+            changeD = true;
+            sleepTimeCount = 0;
+            readData();
+            wait(shortWait);
+            displayUpdate(temperatureSens, humiditySens, pressureSens, metric);
+            wait(shortWait);
+            button_flag = false;
+            buttIntStatus = 0;
+            nosleep = false;
+          }
+          if ((millis() - previousMillis > 9500) && (millis() - previousMillis <= 12500) && (button_flag == true))
           {
             wdt_nrfReset();
             einkZeroend();
@@ -3913,12 +5851,12 @@ void loop() {
             BATT_COUNT = BATT_TIME;
             sleepTimeCount = SLEEP_TIME;
           }
-          if ((millis() - previousMillis > 5500) && (millis() - previousMillis <= 8500) && (button_flag == true))
+          if ((millis() - previousMillis > 13500) && (millis() - previousMillis <= 16500) && (button_flag == true))
           {
             einkOnePlusend();
             new_device();
           }
-          if ( ( ( millis() - previousMillis > 4500 && millis() - previousMillis <= 5500 ) || ( millis() - previousMillis > 8500)) && button_flag == true)
+          if ( ( ( millis() - previousMillis < 1000) || ( millis() - previousMillis > 4500 && millis() - previousMillis <= 5500 ) || ( millis() - previousMillis > 8500 && millis() - previousMillis <= 9500 ) || ( millis() - previousMillis > 12500 && millis() - previousMillis <= 13500 ) || ( millis() - previousMillis > 16500)) && button_flag == true)
           {
             wdt_nrfReset();
             change = true;
@@ -3987,14 +5925,7 @@ void loop() {
       periodTimer = stopTimer - startTimer;
     }
     if (periodTimer >= SLEEP_TIME_WDT) {
-      quotientTimer = periodTimer / SLEEP_TIME_WDT;
-      if (quotientTimer == 0) {
-        PRECISION_TIME_WDT = periodTimer - SLEEP_TIME_WDT;
-        sleepTimeCount++;
-      } else {
-        PRECISION_TIME_WDT = periodTimer - SLEEP_TIME_WDT * quotientTimer;
-        sleepTimeCount = sleepTimeCount + quotientTimer;
-      }
+      PRECISION_TIME_WDT = SLEEP_TIME_WDT;
     } else {
       PRECISION_TIME_WDT = SLEEP_TIME_WDT - periodTimer;
     }
@@ -4013,7 +5944,6 @@ void resetPresent() {
   mesForec = false;
   mesSig = false;
   mesBat = false;
-  mesTimeset = false;
   mesBatset = false;
   mesRes = false;
   mesColorset = false;
@@ -4026,23 +5956,35 @@ void resetPresent() {
   changeBiz = true;
 #endif
   sendAfterResTask = true;
-  changeT = true;
+  //changeT = true;
   changeB = true;
   changeC = true;
+  changeD = true;
 }
 
 
 void bme_initAsleep() {
-  delay(100);
+#ifdef BME280
   if (! bme.begin()) {
     error_bme = true;
   }
   bme.setSampling(Adafruit_BME280::MODE_FORCED,
                   Adafruit_BME280::SAMPLING_X1, // temperature
-                  Adafruit_BME280::SAMPLING_X2, // pressure
+                  Adafruit_BME280::SAMPLING_X1, // pressure
                   Adafruit_BME280::SAMPLING_X1, // humidity
-                  Adafruit_BME280::FILTER_X2   );
+                  Adafruit_BME280::FILTER_OFF);
   wait(500);
+#else
+  if (! bme.begin()) {
+    error_bme = true;
+  }
+  bme.setSampling(Adafruit_BMP280::MODE_FORCED,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X1,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X1,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_OFF);
+  wait(50);
+  sensor.begin();
+#endif
 }
 
 
@@ -4051,6 +5993,9 @@ void readData() {
   if (sendAfterResTask == true) {
     change = true;
   }
+
+
+#ifdef BME280
   if (error_bme == false) {
     bme.takeForcedMeasurement();
     temperatureSens = bme.readTemperature();
@@ -4063,6 +6008,20 @@ void readData() {
     humiditySens = -1.0;
     forecast = 10;
   }
+#else
+  if (error_bme == false) {
+    bme.takeForcedMeasurement();
+    //temperatureSens = bme.readTemperature();
+    pressureSens = bme.readPressure() / 100.0F;
+    forecast = sample(pressureSens);
+  } else {
+    //temperatureSens = -1.0;
+    pressureSens = -1.0;
+    forecast = 10;
+  }
+  temperatureSens = sensor.readTemperature();
+  humiditySens = sensor.readHumidity();
+#endif
 
 
 
@@ -4131,7 +6090,7 @@ void readData() {
   }
 
 #ifdef LIGHTSENS
-  brightness = light.get_lux() * 5.0;
+  brightness = light.get_lux() * 6.5;
 
   if (abs(brightness - old_brightness) >= brightThreshold) {
     old_brightness = brightness;
@@ -4358,25 +6317,17 @@ static __INLINE uint8_t battery_level_in_percent(const uint16_t mvolts)
 {
   uint8_t battery_level;
 
-  if (mvolts >= 3100)
+  if (mvolts >= 3600)
   {
     battery_level = 100;
   }
-  else if (mvolts > 2900)
+  else if (mvolts > 2200)
   {
-    battery_level = 100 - ((3100 - mvolts) * 20) / 200;
+    battery_level = 100 - ((3600 - mvolts) * 90) / 1400;
   }
-  else if (mvolts > 2750)
+  else if (mvolts > 2100)
   {
-    battery_level = 80 - ((2900 - mvolts) * 30) / 150;
-  }
-  else if (mvolts > 2550)
-  {
-    battery_level = 50 - ((2750 - mvolts) * 40) / 200;
-  }
-  else if (mvolts > 2250)
-  {
-    battery_level = 10 - ((2550 - mvolts) * 10) / 300;
+    battery_level = 10 - ((2200 - mvolts) * 10) / 100;
   }
   else
   {
@@ -4405,20 +6356,10 @@ void sendConfig() {
 #ifdef BIZZER
   MyMessage setSoundMsg(SET_SOUND_ID, V_VAR1);
 #endif
-  MyMessage setTimeSendMsg(SET_TIME_SEND_ID, V_VAR1);
   MyMessage setBattSendMsg(SET_BATT_SEND_ID, V_VAR1);
   MyMessage setColor(SET_COLOR_ID, V_VAR1);
 
   if (sendAfterResTask == true) {
-    if (changeT == true) {
-      check = send(setTimeSendMsg.set(timeSend));
-      if (check == false) {
-        _transportSM.failedUplinkTransmissions = 0;
-        wait(shortWait * 5);
-      } else {
-        changeT = false;
-      }
-    }
 
     if (changeB == true) {
       check = send(setBattSendMsg.set(battSend));
@@ -4441,6 +6382,17 @@ void sendConfig() {
       }
     }
 
+    if (changeD == true) {
+      bool design = loadState(109);
+      check = send(setDesign.set(design));
+      if (check == false) {
+        _transportSM.failedUplinkTransmissions = 0;
+        wait(shortWait * 5);
+      } else {
+        changeD = false;
+      }
+    }
+
 #ifdef BIZZER
     if (changeBiz == true) {
       check = send(setSoundMsg.set(setSound));
@@ -4448,14 +6400,14 @@ void sendConfig() {
         _transportSM.failedUplinkTransmissions = 0;
         wait(shortWait * 5);
       } else {
-        changeC = false;
+        changeBiz = false;
       }
     }
 #endif
-    if (changeT == false || changeB == false || changeC == false) {
+    if (changeB == false || changeC == false || changeD == false) {
       sendAfterResTask = false;
 #ifdef BIZZER
-      if (changeBiz) {
+      if (changeBiz == true) {
         sendAfterResTask = true;
       }
 #endif
@@ -4493,30 +6445,6 @@ void sendResetReason() {
 void receive(const MyMessage & message)
 {
   if (configMode == true) {
-    if (message.sensor == SET_TIME_SEND_ID) {
-      if (message.type == V_VAR1) {
-        timeSend = message.getByte();
-        if (timeSend > 60) {
-          timeSend = 60;
-        }
-        if (timeSend <= 0) {
-          timeSend = 1;
-        }
-        saveState(102, timeSend);
-        wait(shortWait);
-        send(setTimeSendMsg.set(timeSend));
-        wait(shortWait);
-        transportDisable();
-        wait(shortWait);
-        reportTimeInk();
-        configMode = false;
-        change = true;
-        sendAfterResTask = true;
-        changeT = true;
-        timeConf();
-        sleepTimeCount = SLEEP_TIME;
-      }
-    }
 
     if (message.sensor == SET_BATT_SEND_ID) {
       if (message.type == V_VAR1) {
@@ -4525,7 +6453,7 @@ void receive(const MyMessage & message)
           battSend = 24;
         }
         if (battSend <= 0) {
-          battSend = 1;
+          battSend = 0;
         }
         saveState(103, battSend);
         wait(shortWait);
@@ -4556,6 +6484,24 @@ void receive(const MyMessage & message)
         change = true;
         sendAfterResTask = true;
         changeC = true;
+        sleepTimeCount = SLEEP_TIME;
+      }
+    }
+
+
+    if (message.sensor == SET_DESIGN_ID) {
+      if (message.type == V_VAR1) {
+        bool designTemp = message.getBool();
+        saveState(109, designTemp);
+        wait(shortWait);
+        send(setDesign.set(designTemp));
+        wait(shortWait);
+        transportDisable();
+        wait(shortWait);
+        configMode = false;
+        change = true;
+        sendAfterResTask = true;
+        changeD = true;
         sleepTimeCount = SLEEP_TIME;
       }
     }
@@ -4855,7 +6801,7 @@ void check_parent() {
   _transportSM.findingParentNode = true;
   CORE_DEBUG(PSTR("MyS: SEND FIND PARENT REQUEST, WAIT RESPONSE\n"));
   _sendRoute(build(_msg, 255, NODE_SENSOR_ID, C_INTERNAL, 7).set(""));
-  wait(1000, C_INTERNAL, 8);
+  wait(900, C_INTERNAL, 8);
   if (_msg.sensor == 255) {
     if (mGetCommand(_msg) == C_INTERNAL) {
       if (_msg.type == 8) {
