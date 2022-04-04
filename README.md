@@ -2,11 +2,13 @@
 
 Temperature, humidity, pressure and light sensor with 2.9 e-ink display.
 
-## You can make your own pcb here - https://www.pcbway.com/setinvite.aspx?inviteid=550959
+### You can purchase a ready-made device by writing to the mail hello@efektalab.com
 
-#### Don't donate to me, it doesn't work in this world: https://paypal.me/efektalab , just buy:
+### Delivery is carried out worldwide.
 
-#### Sale: https://www.tindie.com/products/diyberk/wireless-mini-weather-station-29-inch-e-paper/
+### You can make your own pcb here - https://www.pcbway.com/setinvite.aspx?inviteid=550959
+
+https://hackaday.io/project/177911-mini-weather-station-efekta-with-e-paper-display
 
 Video: https://youtu.be/0yZfeFMDKKY
 
