@@ -2,7 +2,7 @@
 
 Temperature, humidity, pressure and light sensor with 2.9 e-ink display.
 
-### You can purchase a ready-made device by writing to the mail hello@efektalab.com
+### You can buy a ready-made device by writing to the mail hello@efektalab.com
 
 ### Delivery is carried out worldwide.
 
