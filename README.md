@@ -1,5 +1,9 @@
 # EFEKTA EINK2.9 Inch TEMP-HUM-PRES WEATHER MINI STATION ON NRF52
 
+Телеграм чат DIY Devices - https://t.me/diy_devices
+
+Продажа DIY Устройств - https://t.me/diydevmart
+
 Temperature, humidity, pressure and light sensor with 2.9 e-ink display.
 
 ### You can buy a ready-made device by writing to the mail hello@efektalab.com
